@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import io
+import re
+import requests
 
 from pptx_utils import extract_text_units, apply_translations, extract_reference_texts
 from ai_utils import (
@@ -109,11 +111,76 @@ def _build_context() -> str:
 
 # ── Stage: upload ─────────────────────────────────────────────────────────────
 
+def _gdrive_file_id(url: str) -> str | None:
+    """Extract Google Drive file ID from various share URL formats."""
+    patterns = [
+        r"/file/d/([a-zA-Z0-9_-]+)",
+        r"[?&]id=([a-zA-Z0-9_-]+)",
+        r"/presentation/d/([a-zA-Z0-9_-]+)",
+    ]
+    for p in patterns:
+        m = re.search(p, url)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _download_gdrive(file_id: str) -> bytes:
+    """Download a file from Google Drive, handling the large-file confirmation page."""
+    session = requests.Session()
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    resp = session.get(url, stream=True, timeout=300)
+    # Large files show a virus-scan warning page; grab the confirmation token
+    for key, value in resp.cookies.items():
+        if key.startswith("download_warning"):
+            url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={value}"
+            resp = session.get(url, stream=True, timeout=300)
+            break
+    resp.raise_for_status()
+    return resp.content
+
+
 if st.session_state.stage == "upload":
     st.header("PPT 파일 업로드 및 캠페인 브리프")
 
     # ── 1. PPTX 파일 ──────────────────────────────────────────────────────────
-    uploaded = st.file_uploader("한국어 PPTX 파일 선택 *", type=["pptx"])
+    st.subheader("한국어 PPTX 파일")
+    tab_local, tab_drive = st.tabs(["📁 직접 업로드", "☁️ Google Drive 링크"])
+
+    with tab_local:
+        uploaded = st.file_uploader("PPTX 파일 선택", type=["pptx"], label_visibility="collapsed")
+
+    with tab_drive:
+        st.caption("파일을 Google Drive에서 공유(링크가 있는 모든 사용자 → 뷰어)한 뒤 링크를 붙여넣으세요.")
+        drive_url = st.text_input("Google Drive 공유 링크", placeholder="https://drive.google.com/file/d/.../view?usp=sharing", label_visibility="collapsed")
+        drive_bytes = None
+        drive_name = None
+        if drive_url.strip():
+            fid = _gdrive_file_id(drive_url.strip())
+            if fid:
+                st.caption(f"파일 ID: `{fid}`")
+            else:
+                st.warning("올바른 Google Drive 링크가 아닙니다.")
+
+    # Resolve whichever source the user provided
+    def _resolve_file():
+        if uploaded is not None:
+            return uploaded.read(), uploaded.name
+        if drive_url.strip():
+            fid = _gdrive_file_id(drive_url.strip())
+            if not fid:
+                return None, None
+            with st.spinner("Google Drive에서 파일 다운로드 중..."):
+                try:
+                    data = _download_gdrive(fid)
+                    name = f"gdrive_{fid[:8]}.pptx"
+                    return data, name
+                except Exception as e:
+                    st.error(f"다운로드 실패: {e}")
+                    return None, None
+        return None, None
+
+    file_ready = (uploaded is not None) or bool(drive_url.strip() and _gdrive_file_id(drive_url.strip()))
 
     st.divider()
 
@@ -175,8 +242,11 @@ if st.session_state.stage == "upload":
 
     st.divider()
 
-    if st.button("분석 시작", type="primary", disabled=uploaded is None):
-        file_bytes = uploaded.read()
+    if st.button("분석 시작", type="primary", disabled=not file_ready):
+        file_bytes, raw_name = _resolve_file()
+        if file_bytes is None:
+            st.error("파일을 불러오지 못했습니다.")
+            st.stop()
         with st.spinner("텍스트 파싱 중..."):
             text_units = extract_text_units(file_bytes)
 
@@ -215,7 +285,8 @@ if st.session_state.stage == "upload":
             st.session_state.font_name = ""
 
         st.session_state.file_bytes = file_bytes
-        st.session_state.file_name = uploaded.name.replace(".pptx", "_EN.pptx")
+        base = (raw_name or "translated").replace(".pptx", "")
+        st.session_state.file_name = f"{base}_EN.pptx"
         st.session_state.text_units = text_units
         st.session_state.classification_done = False
         st.session_state.stage = "classify"
