@@ -130,32 +130,58 @@ def _gdrive_is_slides(url: str) -> bool:
 
 
 def _download_gdrive(file_id: str, is_slides: bool = False) -> bytes:
-    """Download a file from Google Drive."""
+    """Download a file from Google Drive, trying multiple strategies."""
     session = requests.Session()
+    errors = []
 
+    # Strategy 1: Google Slides export (for Slides files or as fallback)
     if is_slides:
-        # Google Slides → export directly as PPTX (works for publicly shared files)
         url = f"https://docs.google.com/presentation/d/{file_id}/export/pptx"
-        resp = session.get(url, timeout=300)
-        resp.raise_for_status()
-        return resp.content
+        try:
+            resp = session.get(url, timeout=300)
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                return resp.content
+            errors.append(f"Slides export: HTTP {resp.status_code}")
+        except Exception as e:
+            errors.append(f"Slides export: {e}")
 
-    # Regular Drive file: try new usercontent endpoint with confirm=t first
+    # Strategy 2: new usercontent endpoint with confirm=t
     url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&authuser=0&confirm=t"
-    resp = session.get(url, stream=True, timeout=300)
-    if resp.status_code == 200 and len(resp.content) > 1000:
-        return resp.content
+    try:
+        resp = session.get(url, stream=True, timeout=300)
+        if resp.status_code == 200 and len(resp.content) > 1000:
+            return resp.content
+        errors.append(f"usercontent: HTTP {resp.status_code}")
+    except Exception as e:
+        errors.append(f"usercontent: {e}")
 
-    # Fall back to legacy URL with cookie-based confirmation
+    # Strategy 3: try Slides export even if URL didn't look like Slides
+    if not is_slides:
+        url = f"https://docs.google.com/presentation/d/{file_id}/export/pptx"
+        try:
+            resp = session.get(url, timeout=300)
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                return resp.content
+            errors.append(f"Slides fallback: HTTP {resp.status_code}")
+        except Exception as e:
+            errors.append(f"Slides fallback: {e}")
+
+    # Strategy 4: legacy uc endpoint with cookie confirmation
     url = f"https://drive.google.com/uc?export=download&id={file_id}"
-    resp = session.get(url, stream=True, timeout=300)
-    for key, value in resp.cookies.items():
-        if key.startswith("download_warning"):
-            url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={value}"
-            resp = session.get(url, stream=True, timeout=300)
-            break
-    resp.raise_for_status()
-    return resp.content
+    try:
+        resp = session.get(url, stream=True, timeout=300)
+        for key, value in resp.cookies.items():
+            if key.startswith("download_warning"):
+                url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={value}"
+                resp = session.get(url, stream=True, timeout=300)
+                break
+        if resp.status_code == 200 and len(resp.content) > 1000:
+            return resp.content
+        errors.append(f"legacy uc: HTTP {resp.status_code}")
+    except Exception as e:
+        errors.append(f"legacy uc: {e}")
+
+    raise RuntimeError(f"모든 다운로드 방법 실패: {'; '.join(errors)}")
 
 
 if st.session_state.stage == "upload":
