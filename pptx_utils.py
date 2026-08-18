@@ -29,7 +29,7 @@ def extract_text_units(file_bytes: bytes) -> list[dict]:
     return text_units
 
 
-def apply_translations(file_bytes: bytes, translations: dict[str, str]) -> bytes:
+def apply_translations(file_bytes: bytes, translations: dict[str, str], font_name: str = "") -> bytes:
     prs = Presentation(io.BytesIO(file_bytes))
 
     for s_idx, slide in enumerate(prs.slides):
@@ -57,6 +57,8 @@ def apply_translations(file_bytes: bytes, translations: dict[str, str]) -> bytes
                 if not para.runs:
                     continue
                 para.runs[0].text = en_text
+                if font_name:
+                    para.runs[0].font.name = font_name
 
                 # Korean chars are ~1.3× average English char width
                 effective_ko_width = ko_len * 1.3

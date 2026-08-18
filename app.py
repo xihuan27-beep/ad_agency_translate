@@ -26,6 +26,7 @@ def _init():
         "key_phrases": [],       # list of {"한국어": str, "영어": str}
         "ref_pptx_texts": [],    # English lines from a reference PPTX
         "glossary": "",          # free-text proper nouns to keep as-is
+        "font_name": "",         # family name extracted from uploaded font file
         "text_units": [],
         "classified_units": [],
         "classification_done": False,
@@ -153,7 +154,16 @@ if st.session_state.stage == "upload":
 
     st.divider()
 
-    # ── 5. 고유명사 (번역 유지) ───────────────────────────────────────────────
+    # ── 5. 영어 폰트 (선택) ───────────────────────────────────────────────────
+    st.subheader("영어 폰트 (선택)")
+    st.caption("번역된 텍스트에 적용할 TTF/OTF 폰트 파일을 업로드하세요. (해당 폰트가 PPT를 열 PC에 설치되어 있어야 합니다)")
+    font_uploaded = st.file_uploader("폰트 파일 (선택, TTF/OTF)", type=["ttf", "otf"], key="font_uploader")
+    if font_uploaded is not None:
+        st.caption(f"업로드된 파일: {font_uploaded.name}")
+
+    st.divider()
+
+    # ── 6. 고유명사 (번역 유지) ───────────────────────────────────────────────
     st.subheader("고유명사 / 번역하지 않을 단어")
     st.caption("영어로도 그대로 쓸 브랜드명, 인명, 제품명 등을 쉼표로 구분해 입력하세요.")
     glossary = st.text_input(
@@ -185,6 +195,24 @@ if st.session_state.stage == "upload":
                 st.session_state.ref_pptx_texts = extract_reference_texts(ref_uploaded.read())
         else:
             st.session_state.ref_pptx_texts = []
+
+        if font_uploaded is not None:
+            try:
+                from fontTools import ttLib
+                tt = ttLib.TTFont(io.BytesIO(font_uploaded.read()))
+                extracted_name = ""
+                for record in tt['name'].names:
+                    if record.nameID == 1:
+                        try:
+                            extracted_name = record.toUnicode()
+                            break
+                        except Exception:
+                            pass
+                st.session_state.font_name = extracted_name
+            except Exception:
+                st.session_state.font_name = ""
+        else:
+            st.session_state.font_name = ""
 
         st.session_state.file_bytes = file_bytes
         st.session_state.file_name = uploaded.name.replace(".pptx", "_EN.pptx")
@@ -537,7 +565,11 @@ elif st.session_state.stage == "download":
                 **st.session_state.copy_selections,
             }
             try:
-                out = apply_translations(st.session_state.file_bytes, all_translations)
+                out = apply_translations(
+                    st.session_state.file_bytes,
+                    all_translations,
+                    font_name=st.session_state.font_name,
+                )
                 st.session_state.output_bytes = out
             except Exception as e:
                 st.error(f"파일 생성 오류: {e}")
