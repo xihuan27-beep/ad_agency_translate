@@ -262,13 +262,14 @@ elif st.session_state.stage == "review_2b":
     copy_units = st.session_state.copy_units
 
     if not st.session_state.copy_options_loaded:
-        with st.spinner("AI가 카피 옵션을 생성하는 중..."):
+        with st.spinner("AI가 카피 옵션을 생성하는 중... (뉘앙스 분석 포함, 잠시만 기다려주세요)"):
             try:
                 opts = generate_copy_options(copy_units, st.session_state.glossary)
                 st.session_state.copy_options = opts
-                # Default selection: first option
+                # Default selection: first (creative) option
                 st.session_state.copy_selections = {
-                    u["id"]: opts.get(u["id"], ["", "", ""])[0] for u in copy_units
+                    u["id"]: opts.get(u["id"], {}).get("options", [""])[0]
+                    for u in copy_units
                 }
                 st.session_state.copy_options_loaded = True
             except Exception as e:
@@ -284,7 +285,12 @@ elif st.session_state.stage == "review_2b":
         st.session_state.current_copy_idx = idx
 
     unit = copy_units[idx]
-    options = st.session_state.copy_options.get(unit["id"], ["", "", ""])
+    unit_data = st.session_state.copy_options.get(unit["id"], {})
+    options = unit_data.get("options", ["", "", ""])
+    notes = unit_data.get("notes", "")
+    recommendation = unit_data.get("recommendation", "")
+    cultural_flag = unit_data.get("cultural_flag", "")
+    clarification = unit_data.get("clarification", "")
     current_selection = st.session_state.copy_selections.get(unit["id"], options[0] if options else "")
 
     # Progress
@@ -295,36 +301,58 @@ elif st.session_state.stage == "review_2b":
     with col_ko:
         st.markdown("**한국어 원문**")
         st.markdown(
-            f"""<div style="background:#f0f2f6;padding:16px;border-radius:8px;font-size:15px;">
+            f"""<div style="background:#f0f2f6;padding:16px;border-radius:8px;font-size:15px;line-height:1.6;">
             {unit['ko_text']}</div>""",
             unsafe_allow_html=True,
         )
 
+        # Clarification flag (if AI had to assume meaning)
+        if clarification:
+            st.warning(f"**해석 가정:** {clarification}")
+
+        # Cultural flag
+        if cultural_flag:
+            st.info(f"**문화적 참고:** {cultural_flag}")
+
     with col_en:
         st.markdown("**영어 옵션 선택**")
-        # Find index of current selection (may be a custom refined version)
+
+        OPTION_LABELS = [
+            "① Creative — 의역 (feel·rhythm·impact 우선)",
+            "② Balanced — 균형 (의미 + 자연스러운 영어)",
+            "③ Faithful — 직역 (원문 의미 충실)",
+        ]
+
         try:
             sel_idx = options.index(current_selection)
         except ValueError:
             sel_idx = None
 
         if sel_idx is not None:
-            chosen = st.radio(
+            chosen_idx = st.radio(
                 "옵션",
-                options=options,
+                options=list(range(len(options))),
                 index=sel_idx,
+                format_func=lambda i: f"{OPTION_LABELS[i]}\n\n{options[i]}",
                 label_visibility="collapsed",
                 key=f"radio_{unit['id']}",
             )
+            chosen = options[chosen_idx]
             st.session_state.copy_selections[unit["id"]] = chosen
         else:
-            # Custom refined text — show as highlighted + option to reset
             st.success(f"**수정된 카피:** {current_selection}")
             if st.button("원래 옵션으로 돌아가기"):
                 st.session_state.copy_selections[unit["id"]] = options[0]
-                # Reset chat history for this line
                 st.session_state.chat_history_2b = []
                 st.rerun()
+
+    # Translator notes (always shown)
+    if notes or recommendation:
+        with st.expander("📝 번역 노트 (뉘앙스·라임·추천)", expanded=True):
+            if notes:
+                st.markdown(f"**원문 분석**\n\n{notes}")
+            if recommendation:
+                st.markdown(f"**추천**\n\n{recommendation}")
 
     st.divider()
 

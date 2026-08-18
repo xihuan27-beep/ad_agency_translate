@@ -89,26 +89,57 @@ Respond with ONLY a JSON array:
 
 def generate_copy_options(
     copy_units: list[dict], glossary: str
-) -> dict[str, list[str]]:
-    """Generate 3 transcreation options per copy unit. Returns id → [opt1, opt2, opt3]."""
+) -> dict[str, dict]:
+    """Generate 3 transcreation options per copy unit with rich annotations.
+
+    Returns id -> {
+        options: [creative, balanced, faithful],
+        notes: nuance/rhyme/wordplay explanation,
+        recommendation: which option and why,
+        cultural_flag: US-audience note (empty if n/a),
+        clarification: interpretation assumption if ambiguous (empty if clear)
+    }
+    """
     client = _client()
     input_list = [{"id": u["id"], "ko_text": u["ko_text"]} for u in copy_units]
 
-    prompt = f"""You are a creative advertising copywriter specializing in transcreation for the US market.
+    prompt = f"""You are a creative director at an advertising agency, formerly a senior copywriter.
 
-Consider the full sequence below together (maintain contextual/campaign flow), but treat EACH LINE as an individual creative piece.
-
-For every line generate exactly 3 distinct English options:
-- Option 1: Professional & polished
-- Option 2: Bold & energetic
-- Option 3: Minimalist & high-impact
+[Context]
+Translating Korean TV commercial (TVC) copy for the US market.
+- Maintain the content, logical structure, and narrative flow across lines
+- Adapt to natural American English; liberal interpretation (의역) is encouraged when it better captures tone, rhythm, or impact
+- Pay close attention to rhymes, wordplay, double meanings, and emotional register in the Korean original
 {_glossary_line(glossary)}
 
-Input:
+[Task]
+For EACH line, produce:
+1. Exactly 3 English options:
+   - Option 1 (Creative): Liberal transcreation — prioritize feel, rhythm, punch, and US market resonance
+   - Option 2 (Balanced): Balance faithfulness to meaning with natural American English flow
+   - Option 3 (Faithful): Closest to the literal Korean meaning, minimal interpretation
+2. "notes": In English, explain any rhymes, puns, double meanings, emotional tone, or stylistic features in the Korean original that informed your choices
+3. "recommendation": State which option better preserves original intent vs. which has stronger creative impact, and explain why briefly
+4. "cultural_flag": If a Korean cultural element or expression will be opaque to a US audience, explain the issue and suggest how to handle it. Empty string if not applicable.
+5. "clarification": If the Korean meaning is ambiguous or could be interpreted multiple ways, state the interpretation you assumed. Empty string if meaning is clear.
+
+Consider the full sequence together — maintain campaign/narrative flow across all lines.
+
+[Input]
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
+[Output Format]
 Respond with ONLY a JSON array:
-[{{"id": "...", "options": ["opt1", "opt2", "opt3"]}}]"""
+[
+  {{
+    "id": "...",
+    "options": ["Option 1 creative", "Option 2 balanced", "Option 3 faithful"],
+    "notes": "...",
+    "recommendation": "...",
+    "cultural_flag": "...",
+    "clarification": "..."
+  }}
+]"""
 
     resp = client.messages.create(
         model=MODEL,
@@ -116,7 +147,16 @@ Respond with ONLY a JSON array:
         messages=[{"role": "user", "content": prompt}],
     )
     result = _extract_json(resp.content[0].text)
-    return {item["id"]: item["options"] for item in result}
+    return {
+        item["id"]: {
+            "options": item.get("options", ["", "", ""]),
+            "notes": item.get("notes", ""),
+            "recommendation": item.get("recommendation", ""),
+            "cultural_flag": item.get("cultural_flag", ""),
+            "clarification": item.get("clarification", ""),
+        }
+        for item in result
+    }
 
 
 def chat_modify_presentation(
@@ -164,18 +204,20 @@ def chat_refine_copy(
     instruction: str,
     glossary: str,
 ) -> str:
-    """Refine a single copy line based on user instruction. Returns refined English text."""
+    """Refine a single TVC copy line based on user instruction. Returns refined English text."""
     client = _client()
 
-    prompt = f"""You are a creative advertising copywriter.
+    prompt = f"""You are a creative director at an advertising agency, formerly a senior copywriter.
+You are refining English TVC copy translated from Korean for the US market.
 
 Korean original: "{ko_text}"
-Current English: "{current_en}"
+Current English version: "{current_en}"
 {_glossary_line(glossary)}
 
 User instruction: "{instruction}"
 
-Refine the English copy. Reply with ONLY the refined text (no quotes, no explanation)."""
+Apply the instruction while preserving the nuance, rhythm, and intent of the Korean original.
+Reply with ONLY the refined English text — no quotes, no explanation, no preamble."""
 
     resp = client.messages.create(
         model=MODEL,
