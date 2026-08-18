@@ -1,6 +1,7 @@
 import io
 from pptx import Presentation
 from pptx.util import Pt
+from pptx.enum.text import MSO_AUTO_SIZE
 
 
 def extract_text_units(file_bytes: bytes) -> list[dict]:
@@ -35,26 +36,44 @@ def apply_translations(file_bytes: bytes, translations: dict[str, str]) -> bytes
         for shape in slide.shapes:
             if not shape.has_text_frame:
                 continue
-            for p_idx, para in enumerate(shape.text_frame.paragraphs):
+            tf = shape.text_frame
+            orig_auto_size = tf.auto_size
+            frame_modified = False
+
+            for p_idx, para in enumerate(tf.paragraphs):
                 unit_id = f"s{s_idx}_sh{shape.shape_id}_p{p_idx}"
                 if unit_id not in translations:
                     continue
-
                 en_text = translations[unit_id]
                 ko_len = len(para.text)
                 en_len = len(en_text)
+                if ko_len == 0 or en_len == 0:
+                    continue
 
-                orig_size = 14.0
-                if para.runs and para.runs[0].font.size:
-                    orig_size = para.runs[0].font.size.pt
+                run_sizes = [r.font.size.pt if r.font.size else None for r in para.runs]
 
-                # Clear all runs then write to first
                 for run in para.runs:
                     run.text = ""
-                if para.runs:
-                    para.runs[0].text = en_text
-                    if en_len > ko_len * 1.2:
-                        para.runs[0].font.size = Pt(max(orig_size * 0.85, 9.0))
+                if not para.runs:
+                    continue
+                para.runs[0].text = en_text
+
+                # Korean chars are ~1.3× average English char width
+                effective_ko_width = ko_len * 1.3
+                if en_len > effective_ko_width:
+                    scale = max(effective_ko_width / en_len, 0.65)
+                    orig_size = run_sizes[0] if run_sizes else None
+                    if orig_size:
+                        para.runs[0].font.size = Pt(max(orig_size * scale, 8.0))
+
+                frame_modified = True
+
+            # Enable PowerPoint-native auto-fit, but leave SHAPE_TO_FIT_TEXT frames alone
+            if frame_modified and orig_auto_size != MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT:
+                try:
+                    tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+                except Exception:
+                    pass
 
     out = io.BytesIO()
     prs.save(out)
