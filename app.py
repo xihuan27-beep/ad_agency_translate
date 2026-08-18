@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import re
+import html as _html
 import requests
 
 from pptx_utils import extract_text_units, apply_translations, extract_reference_texts
@@ -385,7 +386,10 @@ elif st.session_state.stage == "classify":
             cat = u["category"]
             tcol, bcol = st.columns([6, 1])
             with tcol:
-                st.markdown(u["ko_text"])
+                st.markdown(
+                    f"<p style='font-size:14px;margin:4px 0;'>{_html.escape(u['ko_text'])}</p>",
+                    unsafe_allow_html=True,
+                )
             with bcol:
                 btn_label = "📢 카피" if cat == "copy" else "📊 발표용"
                 btn_type = "primary" if cat == "copy" else "secondary"
@@ -464,14 +468,14 @@ elif st.session_state.stage == "review_2a":
                 st.markdown(
                     f"<div style='padding:10px 14px;border-radius:6px;"
                     f"border:1px solid rgba(128,128,128,0.3);font-size:14px;"
-                    f"line-height:1.6;'>{u['ko_text']}</div>",
+                    f"line-height:1.6;'>{_html.escape(u['ko_text'])}</div>",
                     unsafe_allow_html=True,
                 )
             with en_col:
                 st.markdown(
                     f"<div style='padding:10px 14px;border-radius:6px;"
                     f"border:1px solid rgba(128,128,128,0.3);font-size:14px;"
-                    f"line-height:1.6;'>{en_text if en_text else '—'}</div>",
+                    f"line-height:1.6;'>{_html.escape(en_text) if en_text else '—'}</div>",
                     unsafe_allow_html=True,
                 )
             if clarification:
