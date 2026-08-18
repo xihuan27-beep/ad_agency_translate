@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 
-from pptx_utils import extract_text_units, apply_translations
+from pptx_utils import extract_text_units, apply_translations, extract_reference_texts
 from ai_utils import (
     classify_text_units,
     translate_presentation_texts,
@@ -20,7 +20,12 @@ def _init():
         "stage": "upload",
         "file_bytes": None,
         "file_name": "translated.pptx",
-        "glossary": "",
+        # brief
+        "brand_name_ko": "",
+        "brand_name_en": "",
+        "key_phrases": [],       # list of {"한국어": str, "영어": str}
+        "ref_pptx_texts": [],    # English lines from a reference PPTX
+        "glossary": "",          # free-text proper nouns to keep as-is
         "text_units": [],
         "classified_units": [],
         "classification_done": False,
@@ -68,17 +73,97 @@ def _show_progress():
 
 _show_progress()
 
+
+def _build_context() -> str:
+    """Assemble the full brief/context string to inject into every AI prompt."""
+    parts = []
+
+    brand_ko = st.session_state.brand_name_ko.strip()
+    brand_en = st.session_state.brand_name_en.strip()
+    if brand_en or brand_ko:
+        label = f"'{brand_en}' (EN) / '{brand_ko}' (KO)" if brand_en and brand_ko else brand_en or brand_ko
+        parts.append(
+            f"Brand name: {label}. Always use '{brand_en or brand_ko}' in English translations."
+        )
+
+    kp = [p for p in st.session_state.key_phrases if p.get("한국어", "").strip() and p.get("영어", "").strip()]
+    if kp:
+        lines = "\n".join(f"  '{p['한국어']}' → '{p['영어']}'" for p in kp)
+        parts.append(f"Preferred term translations (use these exact English expressions):\n{lines}")
+
+    glossary = st.session_state.glossary.strip()
+    if glossary:
+        parts.append(f"Do NOT translate these proper nouns — keep as-is: {glossary}")
+
+    ref = st.session_state.ref_pptx_texts
+    if ref:
+        sample = "\n".join(f"  - {t}" for t in ref[:30])
+        parts.append(
+            "Style & terminology reference (from a previous approved English translation — "
+            f"follow this vocabulary and register):\n{sample}"
+        )
+
+    return "\n\n".join(parts)
+
+
 # ── Stage: upload ─────────────────────────────────────────────────────────────
 
 if st.session_state.stage == "upload":
-    st.header("PPT 파일 업로드 및 사전 설정")
+    st.header("PPT 파일 업로드 및 캠페인 브리프")
 
-    uploaded = st.file_uploader("한국어 PPTX 파일 선택", type=["pptx"])
-    glossary = st.text_area(
-        "고유명사 / 유지 단어 (Glossary)",
-        placeholder="예: OpenAI, 삼성전자, ChatGPT → 번역 시 그대로 유지됩니다.",
-        height=80,
+    # ── 1. PPTX 파일 ──────────────────────────────────────────────────────────
+    uploaded = st.file_uploader("한국어 PPTX 파일 선택 *", type=["pptx"])
+
+    st.divider()
+
+    # ── 2. 브랜드명 ───────────────────────────────────────────────────────────
+    st.subheader("브랜드명")
+    col_ko, col_en = st.columns(2)
+    with col_ko:
+        brand_ko = st.text_input("한국어", placeholder="예: 삼성전자", value=st.session_state.brand_name_ko)
+    with col_en:
+        brand_en = st.text_input("영어", placeholder="예: Samsung Electronics", value=st.session_state.brand_name_en)
+
+    st.divider()
+
+    # ── 3. 주요 용어 한↔영 매핑 ──────────────────────────────────────────────
+    st.subheader("주요 용어 매핑 (한국어 → 영어)")
+    st.caption("자주 쓰는 표현의 선호 번역을 지정합니다. 행 추가 버튼으로 항목을 추가하세요.")
+
+    init_kp = st.session_state.key_phrases if st.session_state.key_phrases else [{"한국어": "", "영어": ""}]
+    kp_df = pd.DataFrame(init_kp)
+    edited_kp = st.data_editor(
+        kp_df,
+        column_config={
+            "한국어": st.column_config.TextColumn("한국어 표현", width="large"),
+            "영어": st.column_config.TextColumn("영어 번역 (선호)", width="large"),
+        },
+        num_rows="dynamic",
+        hide_index=True,
+        use_container_width=True,
+        key="kp_editor",
     )
+
+    st.divider()
+
+    # ── 4. 이전 번역본 참고 (선택) ────────────────────────────────────────────
+    st.subheader("이전 번역본 참고 (선택)")
+    st.caption("기존 영문 PPT를 올리면 용어·문체를 참고해 일관성을 유지합니다.")
+    ref_uploaded = st.file_uploader("영문 참고 PPTX (선택)", type=["pptx"], key="ref_uploader")
+
+    st.divider()
+
+    # ── 5. 고유명사 (번역 유지) ───────────────────────────────────────────────
+    st.subheader("고유명사 / 번역하지 않을 단어")
+    st.caption("영어로도 그대로 쓸 브랜드명, 인명, 제품명 등을 쉼표로 구분해 입력하세요.")
+    glossary = st.text_input(
+        "고유명사",
+        placeholder="예: ChatGPT, POSCO, K-Beauty",
+        value=st.session_state.glossary,
+        label_visibility="collapsed",
+    )
+
+    st.divider()
 
     if st.button("분석 시작", type="primary", disabled=uploaded is None):
         file_bytes = uploaded.read()
@@ -89,9 +174,20 @@ if st.session_state.stage == "upload":
             st.error("번역 가능한 텍스트를 찾지 못했습니다. 파일을 확인해 주세요.")
             st.stop()
 
+        # Save brief to session state
+        st.session_state.brand_name_ko = brand_ko
+        st.session_state.brand_name_en = brand_en
+        st.session_state.key_phrases = edited_kp.to_dict("records")
+        st.session_state.glossary = glossary
+
+        if ref_uploaded is not None:
+            with st.spinner("참고 번역본 분석 중..."):
+                st.session_state.ref_pptx_texts = extract_reference_texts(ref_uploaded.read())
+        else:
+            st.session_state.ref_pptx_texts = []
+
         st.session_state.file_bytes = file_bytes
         st.session_state.file_name = uploaded.name.replace(".pptx", "_EN.pptx")
-        st.session_state.glossary = glossary
         st.session_state.text_units = text_units
         st.session_state.classification_done = False
         st.session_state.stage = "classify"
@@ -106,7 +202,7 @@ elif st.session_state.stage == "classify":
         with st.spinner("AI가 텍스트를 분류하는 중..."):
             try:
                 classified = classify_text_units(
-                    st.session_state.text_units, st.session_state.glossary
+                    st.session_state.text_units, _build_context()
                 )
                 st.session_state.classified_units = classified
                 st.session_state.classification_done = True
@@ -184,7 +280,7 @@ elif st.session_state.stage == "review_2a":
     if not st.session_state.translations_loaded:
         with st.spinner("AI가 발표용 텍스트를 일괄 번역하는 중..."):
             try:
-                trans = translate_presentation_texts(pres_units, st.session_state.glossary)
+                trans = translate_presentation_texts(pres_units, _build_context())
                 st.session_state.presentation_translations = trans
                 st.session_state.translations_loaded = True
             except Exception as e:
@@ -247,7 +343,7 @@ elif st.session_state.stage == "review_2a":
                     pres_units,
                     st.session_state.presentation_translations,
                     user_msg,
-                    st.session_state.glossary,
+                    _build_context(),
                 )
                 st.session_state.presentation_translations = updated
                 st.session_state.chat_history_2a.append(
@@ -283,7 +379,7 @@ elif st.session_state.stage == "review_2b":
     if not st.session_state.copy_options_loaded:
         with st.spinner("AI가 카피 옵션을 생성하는 중... (뉘앙스 분석 포함, 잠시만 기다려주세요)"):
             try:
-                opts = generate_copy_options(copy_units, st.session_state.glossary)
+                opts = generate_copy_options(copy_units, _build_context())
                 st.session_state.copy_options = opts
                 # Default selection: first (creative) option
                 st.session_state.copy_selections = {
@@ -388,7 +484,7 @@ elif st.session_state.stage == "review_2b":
         with st.spinner("카피 수정 중..."):
             try:
                 refined = chat_refine_copy(
-                    unit["ko_text"], sel, user_msg, st.session_state.glossary
+                    unit["ko_text"], sel, user_msg, _build_context()
                 )
                 st.session_state.copy_selections[unit["id"]] = refined
                 st.session_state.chat_history_2b.append(

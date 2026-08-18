@@ -29,8 +29,9 @@ def _extract_json(text: str):
     raise ValueError(f"JSON 파싱 실패: {text[:300]}")
 
 
-def _glossary_line(glossary: str) -> str:
-    return f"\n[Glossary — Must NOT translate or alter]: {glossary}" if glossary.strip() else ""
+def _glossary_line(context: str) -> str:
+    """Wrap the pre-built context/brief string into a prompt section."""
+    return f"\n[Context & Constraints]\n{context}" if context.strip() else ""
 
 
 def classify_text_units(text_units: list[dict], glossary: str) -> list[dict]:

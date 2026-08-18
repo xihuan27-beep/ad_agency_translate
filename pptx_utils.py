@@ -59,3 +59,17 @@ def apply_translations(file_bytes: bytes, translations: dict[str, str]) -> bytes
     out = io.BytesIO()
     prs.save(out)
     return out.getvalue()
+
+
+def extract_reference_texts(file_bytes: bytes) -> list[str]:
+    """Extract all non-empty text lines from a reference (already-translated) PPTX."""
+    prs = Presentation(io.BytesIO(file_bytes))
+    texts = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    text = para.text.strip()
+                    if len(text) >= 3:
+                        texts.append(text)
+    return texts
