@@ -194,12 +194,14 @@ elif st.session_state.stage == "review_2a":
 
     # Left-right comparison table
     st.subheader("번역 결과 (좌: 한국어 / 우: 영어)")
+    trans = st.session_state.presentation_translations
     rows = []
     for u in pres_units:
+        item = trans.get(u["id"], {})
         rows.append({
             "슬라이드": u["slide_idx"] + 1,
             "한국어": u["ko_text"],
-            "영어 (번역)": st.session_state.presentation_translations.get(u["id"], ""),
+            "영어 (번역)": item.get("en_text", ""),
         })
     st.dataframe(
         pd.DataFrame(rows),
@@ -211,6 +213,23 @@ elif st.session_state.stage == "review_2a":
         hide_index=True,
         use_container_width=True,
     )
+
+    # Show translator notes if any
+    flagged = [
+        (u, trans.get(u["id"], {}))
+        for u in pres_units
+        if trans.get(u["id"], {}).get("notes") or trans.get(u["id"], {}).get("clarification")
+    ]
+    if flagged:
+        with st.expander(f"📝 번역 노트 ({len(flagged)}개 항목)", expanded=False):
+            for u, item in flagged:
+                st.markdown(f"**슬라이드 {u['slide_idx'] + 1}** — {u['ko_text']}")
+                st.markdown(f"> {item.get('en_text', '')}")
+                if item.get("clarification"):
+                    st.warning(f"**해석 가정:** {item['clarification']}")
+                if item.get("notes"):
+                    st.info(f"**번역 노트:** {item['notes']}")
+                st.markdown("---")
 
     # Chat history display
     for msg in st.session_state.chat_history_2a:
@@ -412,8 +431,13 @@ elif st.session_state.stage == "download":
 
     if st.session_state.output_bytes is None:
         with st.spinner("번역본을 PPTX에 적용하는 중..."):
+            # presentation_translations stores {id: {en_text, notes, ...}}; extract just en_text
+            pres_trans = {
+                uid: v.get("en_text", "")
+                for uid, v in st.session_state.presentation_translations.items()
+            }
             all_translations = {
-                **st.session_state.presentation_translations,
+                **pres_trans,
                 **st.session_state.copy_selections,
             }
             try:

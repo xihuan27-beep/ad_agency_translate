@@ -63,20 +63,47 @@ Respond with ONLY a JSON array:
 
 def translate_presentation_texts(
     presentation_units: list[dict], glossary: str
-) -> dict[str, str]:
-    """Batch-translate all presentation units. Returns id → en_text."""
+) -> dict[str, dict]:
+    """Batch-translate all presentation units.
+
+    Returns id -> {en_text, notes, clarification}
+      notes: cultural/context note for the translator (empty if n/a)
+      clarification: interpretation assumption when Korean was ambiguous (empty if clear)
+    """
     client = _client()
     input_list = [{"id": u["id"], "ko_text": u["ko_text"]} for u in presentation_units]
 
-    prompt = f"""You are an expert presentation translator localizing Korean slides for a US audience.
-Translate each text to natural, professional American English — concise and faithful.
+    prompt = f"""You are the team lead at an advertising agency. Your English is fluent and persuasive — comparable to a well-educated US high school graduate: clear, logical, and natural, without overly complex vocabulary or convoluted sentence structures. You have hands-on experience translating Korean ad proposals and pitches for global clients.
+
+[Context]
+Translating a Korean advertising plan or proposal into English for foreign clients or global HQ marketing teams.
+The logical structure is well-organized in Korean; your job is to carry that logic into English naturally.
+Where Korean cultural context, idioms, or local references would confuse a foreign reader, adapt, supplement, or replace them — do not translate blindly.
+
+[Goals]
+- Preserve the original intent and nuance in natural, clean English
+- If a Korean expression is ambiguous or multi-interpretable, state the assumption you made in "clarification"
+- If a Korean cultural element is hard for a foreign audience, flag it in "notes" and explain how you handled it
+
+[Style & Tone]
+- Logical and systematic; sentence-by-sentence; no unnecessary filler or embellishments
+- Friendly but professionally concise — the tone of a marketing professional talking to a global client team
+- Audience: global marketing team or foreign client; not necessarily ad experts, so avoid unexplained Korean-specific references
 {_glossary_line(glossary)}
 
-Input:
+[Input]
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
-Respond with ONLY a JSON array:
-[{{"id": "...", "en_text": "..."}}]"""
+[Output Format]
+Respond with ONLY a JSON array. Use empty string "" for notes/clarification when not applicable:
+[
+  {{
+    "id": "...",
+    "en_text": "...",
+    "notes": "cultural/context adaptation note, or empty string",
+    "clarification": "interpretation assumption if Korean was ambiguous, or empty string"
+  }}
+]"""
 
     resp = client.messages.create(
         model=MODEL,
@@ -84,7 +111,14 @@ Respond with ONLY a JSON array:
         messages=[{"role": "user", "content": prompt}],
     )
     result = _extract_json(resp.content[0].text)
-    return {item["id"]: item["en_text"] for item in result}
+    return {
+        item["id"]: {
+            "en_text": item.get("en_text", ""),
+            "notes": item.get("notes", ""),
+            "clarification": item.get("clarification", ""),
+        }
+        for item in result
+    }
 
 
 def generate_copy_options(
@@ -161,33 +195,37 @@ Respond with ONLY a JSON array:
 
 def chat_modify_presentation(
     presentation_units: list[dict],
-    current_translations: dict[str, str],
+    current_translations: dict[str, dict],
     instruction: str,
     glossary: str,
-) -> dict[str, str]:
-    """Apply user instruction to all presentation translations. Returns updated id → en_text."""
+) -> dict[str, dict]:
+    """Apply user instruction to all presentation translations.
+
+    Returns updated id -> {en_text, notes, clarification}.
+    """
     client = _client()
     state = [
         {
             "id": u["id"],
             "ko_text": u["ko_text"],
-            "en_text": current_translations.get(u["id"], ""),
+            "en_text": current_translations.get(u["id"], {}).get("en_text", ""),
         }
         for u in presentation_units
     ]
 
-    prompt = f"""You are a presentation translation editor.
+    prompt = f"""You are the team lead at an advertising agency, editing an English translation of a Korean ad proposal for global clients.
 
-Current translations:
+Current translations (Korean + current English):
 {json.dumps(state, ensure_ascii=False, indent=2)}
 {_glossary_line(glossary)}
 
 User instruction: "{instruction}"
 
-Apply the instruction and return ALL translations (updated + unchanged).
+Apply the instruction to ALL items — update those affected, keep others unchanged.
+Maintain the professional, clear, audience-appropriate tone.
 
-Respond with ONLY a JSON array:
-[{{"id": "...", "en_text": "..."}}]"""
+Respond with ONLY a JSON array (ALL items, not just changed ones):
+[{{"id": "...", "en_text": "...", "notes": "...", "clarification": "..."}}]"""
 
     resp = client.messages.create(
         model=MODEL,
@@ -195,7 +233,14 @@ Respond with ONLY a JSON array:
         messages=[{"role": "user", "content": prompt}],
     )
     result = _extract_json(resp.content[0].text)
-    return {item["id"]: item["en_text"] for item in result}
+    return {
+        item["id"]: {
+            "en_text": item.get("en_text", ""),
+            "notes": item.get("notes", ""),
+            "clarification": item.get("clarification", ""),
+        }
+        for item in result
+    }
 
 
 def chat_refine_copy(
