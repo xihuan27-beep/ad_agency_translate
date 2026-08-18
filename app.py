@@ -357,30 +357,47 @@ elif st.session_state.stage == "classify":
     st.info("AI 분류 결과를 확인하고 필요하면 수정하세요. 완료 후 '확인' 버튼을 누르세요.")
 
     units = st.session_state.classified_units
-    df = pd.DataFrame(
-        [
-            {
-                "슬라이드": u["slide_idx"] + 1,
-                "한국어 텍스트": u["ko_text"],
-                "분류": "카피" if u["category"] == "copy" else "발표용",
-            }
-            for u in units
-        ]
-    )
 
-    edited_df = st.data_editor(
-        df,
-        column_config={
-            "슬라이드": st.column_config.NumberColumn(disabled=True, width="small"),
-            "한국어 텍스트": st.column_config.TextColumn(disabled=True, width="large"),
-            "분류": st.column_config.SelectboxColumn(
-                options=["발표용", "카피"], required=True, width="medium"
-            ),
-        },
-        hide_index=True,
-        use_container_width=True,
-        key="classify_editor",
-    )
+    # Group by slide
+    from collections import defaultdict as _dd
+    slide_groups = _dd(list)
+    for i, u in enumerate(units):
+        slide_groups[u["slide_idx"]].append((i, u))
+
+    rerun_needed = False
+    for slide_idx in sorted(slide_groups.keys()):
+        items = slide_groups[slide_idx]
+        hcol, bcol1, bcol2 = st.columns([4, 1, 1])
+        with hcol:
+            st.markdown(f"**슬라이드 {slide_idx + 1}**")
+        with bcol1:
+            if st.button("전체 발표용", key=f"all_pres_{slide_idx}", use_container_width=True):
+                for i, _ in items:
+                    st.session_state.classified_units[i]["category"] = "presentation"
+                rerun_needed = True
+        with bcol2:
+            if st.button("전체 카피", key=f"all_copy_{slide_idx}", use_container_width=True):
+                for i, _ in items:
+                    st.session_state.classified_units[i]["category"] = "copy"
+                rerun_needed = True
+
+        for i, u in items:
+            cat = u["category"]
+            tcol, bcol = st.columns([6, 1])
+            with tcol:
+                st.markdown(u["ko_text"])
+            with bcol:
+                btn_label = "📢 카피" if cat == "copy" else "📊 발표용"
+                btn_type = "primary" if cat == "copy" else "secondary"
+                if st.button(btn_label, key=f"tog_{u['id']}", type=btn_type, use_container_width=True):
+                    st.session_state.classified_units[i]["category"] = (
+                        "presentation" if cat == "copy" else "copy"
+                    )
+                    rerun_needed = True
+        st.divider()
+
+    if rerun_needed:
+        st.rerun()
 
     col_back, col_confirm = st.columns([1, 5])
     with col_back:
@@ -389,11 +406,6 @@ elif st.session_state.stage == "classify":
             st.rerun()
     with col_confirm:
         if st.button("확인 →", type="primary"):
-            for i, row in edited_df.iterrows():
-                st.session_state.classified_units[i]["category"] = (
-                    "copy" if row["분류"] == "카피" else "presentation"
-                )
-
             pres = [u for u in st.session_state.classified_units if u["category"] == "presentation"]
             copy = [u for u in st.session_state.classified_units if u["category"] == "copy"]
             st.session_state.presentation_units = pres
@@ -431,44 +443,42 @@ elif st.session_state.stage == "review_2a":
                 st.stop()
         st.rerun()
 
-    # Left-right comparison table
-    st.subheader("번역 결과 (좌: 한국어 / 우: 영어)")
+    # Slide-grouped translation cards
     trans = st.session_state.presentation_translations
-    rows = []
-    for u in pres_units:
-        item = trans.get(u["id"], {})
-        rows.append({
-            "슬라이드": u["slide_idx"] + 1,
-            "한국어": u["ko_text"],
-            "영어 (번역)": item.get("en_text", ""),
-        })
-    st.dataframe(
-        pd.DataFrame(rows),
-        column_config={
-            "슬라이드": st.column_config.NumberColumn(width="small"),
-            "한국어": st.column_config.TextColumn(width="large"),
-            "영어 (번역)": st.column_config.TextColumn(width="large"),
-        },
-        hide_index=True,
-        use_container_width=True,
-    )
 
-    # Show translator notes if any
-    flagged = [
-        (u, trans.get(u["id"], {}))
-        for u in pres_units
-        if trans.get(u["id"], {}).get("notes") or trans.get(u["id"], {}).get("clarification")
-    ]
-    if flagged:
-        with st.expander(f"📝 번역 노트 ({len(flagged)}개 항목)", expanded=False):
-            for u, item in flagged:
-                st.markdown(f"**슬라이드 {u['slide_idx'] + 1}** — {u['ko_text']}")
-                st.markdown(f"> {item.get('en_text', '')}")
-                if item.get("clarification"):
-                    st.warning(f"**해석 가정:** {item['clarification']}")
-                if item.get("notes"):
-                    st.info(f"**번역 노트:** {item['notes']}")
-                st.markdown("---")
+    from collections import defaultdict as _dd2
+    slide_groups_2a = _dd2(list)
+    for u in pres_units:
+        slide_groups_2a[u["slide_idx"]].append(u)
+
+    for slide_idx in sorted(slide_groups_2a.keys()):
+        items = slide_groups_2a[slide_idx]
+        st.markdown(f"**슬라이드 {slide_idx + 1}**")
+        for u in items:
+            item = trans.get(u["id"], {})
+            en_text = item.get("en_text", "")
+            notes = item.get("notes", "")
+            clarification = item.get("clarification", "")
+            ko_col, en_col = st.columns(2)
+            with ko_col:
+                st.markdown(
+                    f"<div style='padding:10px 14px;border-radius:6px;"
+                    f"border:1px solid rgba(128,128,128,0.3);font-size:14px;"
+                    f"line-height:1.6;'>{u['ko_text']}</div>",
+                    unsafe_allow_html=True,
+                )
+            with en_col:
+                st.markdown(
+                    f"<div style='padding:10px 14px;border-radius:6px;"
+                    f"border:1px solid rgba(128,128,128,0.3);font-size:14px;"
+                    f"line-height:1.6;'>{en_text if en_text else '—'}</div>",
+                    unsafe_allow_html=True,
+                )
+            if clarification:
+                st.caption(f"💬 해석 가정: {clarification}")
+            if notes:
+                st.caption(f"📝 번역 노트: {notes}")
+        st.divider()
 
     # Chat history display
     for msg in st.session_state.chat_history_2a:
@@ -559,7 +569,7 @@ elif st.session_state.stage == "review_2b":
     with col_ko:
         st.markdown("**한국어 원문**")
         st.markdown(
-            f"""<div style="background:#f0f2f6;padding:16px;border-radius:8px;font-size:15px;line-height:1.6;">
+            f"""<div style="padding:16px;border-radius:8px;font-size:15px;line-height:1.6;border:1px solid rgba(128,128,128,0.3);">
             {unit['ko_text']}</div>""",
             unsafe_allow_html=True,
         )

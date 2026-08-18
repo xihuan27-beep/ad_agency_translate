@@ -83,8 +83,8 @@ Where Korean cultural context, idioms, or local references would confuse a forei
 
 [Goals]
 - Preserve the original intent and nuance in natural, clean English
-- If a Korean expression is ambiguous or multi-interpretable, state the assumption you made in "clarification"
-- If a Korean cultural element is hard for a foreign audience, flag it in "notes" and explain how you handled it
+- If a Korean expression is ambiguous or multi-interpretable, state the assumption you made in "clarification" (write in Korean)
+- If a Korean cultural element is hard for a foreign audience, flag it in "notes" and explain how you handled it (write in Korean)
 
 [Style & Tone]
 - Logical and systematic; sentence-by-sentence; no unnecessary filler or embellishments
@@ -96,13 +96,14 @@ Where Korean cultural context, idioms, or local references would confuse a forei
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
 [Output Format]
-Respond with ONLY a JSON array. Use empty string "" for notes/clarification when not applicable:
+Respond with ONLY a JSON array. Use empty string "" for notes/clarification when not applicable.
+Write "notes" and "clarification" fields in Korean:
 [
   {{
     "id": "...",
     "en_text": "...",
-    "notes": "cultural/context adaptation note, or empty string",
-    "clarification": "interpretation assumption if Korean was ambiguous, or empty string"
+    "notes": "문화적/맥락 적응 설명 (한국어), 또는 빈 문자열",
+    "clarification": "한국어 원문이 모호한 경우 해석 가정 (한국어), 또는 빈 문자열"
   }}
 ]"""
 
@@ -153,10 +154,10 @@ For EACH line, produce:
    - Option 1 (Creative): Liberal transcreation — prioritize feel, rhythm, punch, and US market resonance
    - Option 2 (Balanced): Balance faithfulness to meaning with natural American English flow
    - Option 3 (Faithful): Closest to the literal Korean meaning, minimal interpretation
-2. "notes": In English, explain any rhymes, puns, double meanings, emotional tone, or stylistic features in the Korean original that informed your choices
-3. "recommendation": State which option better preserves original intent vs. which has stronger creative impact, and explain why briefly
-4. "cultural_flag": If a Korean cultural element or expression will be opaque to a US audience, explain the issue and suggest how to handle it. Empty string if not applicable.
-5. "clarification": If the Korean meaning is ambiguous or could be interpreted multiple ways, state the interpretation you assumed. Empty string if meaning is clear.
+2. "notes": 한국어 원문의 운율, 말장난, 이중 의미, 감정적 톤, 스타일 특성 등을 한국어로 설명
+3. "recommendation": 어떤 옵션이 원문 의도를 더 잘 살리는지, 어떤 옵션이 크리에이티브 임팩트가 강한지 한국어로 간략히 설명
+4. "cultural_flag": 미국 독자에게 낯선 한국 문화 요소나 표현이 있다면 한국어로 설명. 없으면 빈 문자열.
+5. "clarification": 한국어 의미가 모호하거나 여러 해석이 가능한 경우 어떤 해석을 택했는지 한국어로 설명. 명확하면 빈 문자열.
 
 Consider the full sequence together — maintain campaign/narrative flow across all lines.
 
@@ -164,15 +165,15 @@ Consider the full sequence together — maintain campaign/narrative flow across 
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
 [Output Format]
-Respond with ONLY a JSON array:
+Respond with ONLY a JSON array. Write notes/recommendation/cultural_flag/clarification in Korean:
 [
   {{
     "id": "...",
     "options": ["Option 1 creative", "Option 2 balanced", "Option 3 faithful"],
-    "notes": "...",
-    "recommendation": "...",
-    "cultural_flag": "...",
-    "clarification": "..."
+    "notes": "한국어로 작성",
+    "recommendation": "한국어로 작성",
+    "cultural_flag": "한국어로 작성, 또는 빈 문자열",
+    "clarification": "한국어로 작성, 또는 빈 문자열"
   }}
 ]"""
 
