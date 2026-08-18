@@ -125,12 +125,30 @@ def _gdrive_file_id(url: str) -> str | None:
     return None
 
 
-def _download_gdrive(file_id: str) -> bytes:
-    """Download a file from Google Drive, handling the large-file confirmation page."""
+def _gdrive_is_slides(url: str) -> bool:
+    return bool(re.search(r"/presentation/d/", url))
+
+
+def _download_gdrive(file_id: str, is_slides: bool = False) -> bytes:
+    """Download a file from Google Drive."""
     session = requests.Session()
+
+    if is_slides:
+        # Google Slides → export directly as PPTX (works for publicly shared files)
+        url = f"https://docs.google.com/presentation/d/{file_id}/export/pptx"
+        resp = session.get(url, timeout=300)
+        resp.raise_for_status()
+        return resp.content
+
+    # Regular Drive file: try new usercontent endpoint with confirm=t first
+    url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&authuser=0&confirm=t"
+    resp = session.get(url, stream=True, timeout=300)
+    if resp.status_code == 200 and len(resp.content) > 1000:
+        return resp.content
+
+    # Fall back to legacy URL with cookie-based confirmation
     url = f"https://drive.google.com/uc?export=download&id={file_id}"
     resp = session.get(url, stream=True, timeout=300)
-    # Large files show a virus-scan warning page; grab the confirmation token
     for key, value in resp.cookies.items():
         if key.startswith("download_warning"):
             url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={value}"
@@ -172,7 +190,7 @@ if st.session_state.stage == "upload":
                 return None, None
             with st.spinner("Google Drive에서 파일 다운로드 중..."):
                 try:
-                    data = _download_gdrive(fid)
+                    data = _download_gdrive(fid, is_slides=_gdrive_is_slides(drive_url.strip()))
                     name = f"gdrive_{fid[:8]}.pptx"
                     return data, name
                 except Exception as e:
