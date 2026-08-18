@@ -3,7 +3,7 @@ import os
 import re
 import anthropic
 
-MODEL = "claude-sonnet-5"
+MODEL = "claude-haiku-4-5"
 
 
 def _client() -> anthropic.Anthropic:
