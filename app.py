@@ -190,27 +190,20 @@ if st.session_state.stage == "upload":
 
     # ── 1. PPTX 파일 ──────────────────────────────────────────────────────────
     st.subheader("한국어 PPTX 파일")
-    tab_local, tab_drive = st.tabs(["📁 직접 업로드", "☁️ Google Drive 링크"])
+    st.caption("파일을 Google Drive에서 공유(링크가 있는 모든 사용자 → 뷰어)한 뒤 링크를 붙여넣으세요.")
+    drive_url = st.text_input(
+        "Google Drive 공유 링크",
+        placeholder="https://drive.google.com/file/d/.../view?usp=sharing",
+        label_visibility="collapsed",
+    )
+    if drive_url.strip():
+        fid = _gdrive_file_id(drive_url.strip())
+        if fid:
+            st.caption(f"파일 ID: `{fid}`")
+        else:
+            st.warning("올바른 Google Drive 링크가 아닙니다.")
 
-    with tab_local:
-        uploaded = st.file_uploader("PPTX 파일 선택", type=["pptx"], label_visibility="collapsed")
-
-    with tab_drive:
-        st.caption("파일을 Google Drive에서 공유(링크가 있는 모든 사용자 → 뷰어)한 뒤 링크를 붙여넣으세요.")
-        drive_url = st.text_input("Google Drive 공유 링크", placeholder="https://drive.google.com/file/d/.../view?usp=sharing", label_visibility="collapsed")
-        drive_bytes = None
-        drive_name = None
-        if drive_url.strip():
-            fid = _gdrive_file_id(drive_url.strip())
-            if fid:
-                st.caption(f"파일 ID: `{fid}`")
-            else:
-                st.warning("올바른 Google Drive 링크가 아닙니다.")
-
-    # Resolve whichever source the user provided
     def _resolve_file():
-        if uploaded is not None:
-            return uploaded.read(), uploaded.name
         if drive_url.strip():
             fid = _gdrive_file_id(drive_url.strip())
             if not fid:
@@ -225,7 +218,7 @@ if st.session_state.stage == "upload":
                     return None, None
         return None, None
 
-    file_ready = (uploaded is not None) or bool(drive_url.strip() and _gdrive_file_id(drive_url.strip()))
+    file_ready = bool(drive_url.strip() and _gdrive_file_id(drive_url.strip()))
 
     st.divider()
 
