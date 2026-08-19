@@ -11,7 +11,13 @@ def extract_text_units(file_bytes: bytes) -> list[dict]:
         for shape in slide.shapes:
             if not shape.has_text_frame:
                 continue
-            for p_idx, para in enumerate(shape.text_frame.paragraphs):
+            paragraphs = shape.text_frame.paragraphs
+
+            # Build full shape text (all non-empty paragraphs joined) for context
+            shape_lines = [p.text.strip() for p in paragraphs if len(p.text.strip()) >= 5]
+            shape_text = "\n".join(shape_lines)
+
+            for p_idx, para in enumerate(paragraphs):
                 text = para.text.strip()
                 if len(text) < 5:
                     continue
@@ -25,6 +31,8 @@ def extract_text_units(file_bytes: bytes) -> list[dict]:
                     "p_idx": p_idx,
                     "ko_text": text,
                     "font_size": font_size,
+                    "shape_text": shape_text,
+                    "shape_para_count": len(shape_lines),
                 })
     return text_units
 

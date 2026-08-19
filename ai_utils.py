@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 import anthropic
 
 MODEL = "claude-haiku-4-5"
@@ -32,6 +33,23 @@ def _extract_json(text: str):
 def _glossary_line(context: str) -> str:
     """Wrap the pre-built context/brief string into a prompt section."""
     return f"\n[Context & Constraints]\n{context}" if context.strip() else ""
+
+
+def _retry_missing(fn_call, all_units: list[dict], first_result: list[dict]) -> list[dict]:
+    """If any input IDs are absent from first_result, retry once for missing units only."""
+    input_ids = {u["id"] for u in all_units}
+    returned_ids = {item["id"] for item in first_result}
+    missing = input_ids - returned_ids
+    if not missing:
+        return first_result
+    print(f"[WARN] AI response missing IDs: {missing} — retrying...", file=sys.stderr)
+    missing_units = [u for u in all_units if u["id"] in missing]
+    retry_result = fn_call(missing_units)
+    combined = first_result + retry_result
+    still_missing = input_ids - {item["id"] for item in combined}
+    if still_missing:
+        print(f"[WARN] Still missing after retry: {still_missing}", file=sys.stderr)
+    return combined
 
 
 def classify_text_units(text_units: list[dict], glossary: str) -> list[dict]:
@@ -72,9 +90,17 @@ def translate_presentation_texts(
       clarification: interpretation assumption when Korean was ambiguous (empty if clear)
     """
     client = _client()
-    input_list = [{"id": u["id"], "ko_text": u["ko_text"]} for u in presentation_units]
 
-    prompt = f"""You are the team lead at an advertising agency. Your English is fluent and persuasive — comparable to a well-educated US high school graduate: clear, logical, and natural, without overly complex vocabulary or convoluted sentence structures. You have hands-on experience translating Korean ad proposals and pitches for global clients.
+    def _call(units: list[dict]) -> list[dict]:
+        input_list = []
+        for u in units:
+            entry: dict = {"id": u["id"], "ko_text": u["ko_text"]}
+            # Include full shape context when this line is part of a multi-line text box
+            if u.get("shape_para_count", 1) > 1 and u.get("shape_text", "") != u["ko_text"]:
+                entry["shape_context"] = u["shape_text"]
+            input_list.append(entry)
+
+        prompt = f"""You are the team lead at an advertising agency. Your English is fluent and persuasive — comparable to a well-educated US high school graduate: clear, logical, and natural, without overly complex vocabulary or convoluted sentence structures. You have hands-on experience translating Korean ad proposals and pitches for global clients.
 
 [Context]
 Translating a Korean advertising plan or proposal into English for foreign clients or global HQ marketing teams.
@@ -92,6 +118,13 @@ Where Korean cultural context, idioms, or local references would confuse a forei
 - Audience: global marketing team or foreign client; not necessarily ad experts, so avoid unexplained Korean-specific references
 {_glossary_line(glossary)}
 
+[CRITICAL RULE — Multi-line text boxes]
+Some items include a "shape_context" field. This means the item's ko_text is ONE LINE from a
+text box that spans multiple lines. The shape_context shows the complete text of that box.
+Use shape_context to understand the full meaning, but translate ONLY ko_text for that item.
+You MUST return exactly one JSON object per input item — never skip, merge, or split items.
+The output array length must equal the input array length.
+
 [Input]
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
@@ -107,12 +140,15 @@ Write "notes" and "clarification" fields in Korean:
   }}
 ]"""
 
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=8192,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    result = _extract_json(resp.content[0].text)
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return _extract_json(resp.content[0].text)
+
+    first = _call(presentation_units)
+    result = _retry_missing(_call, presentation_units, first)
     return {
         item["id"]: {
             "en_text": item.get("en_text", ""),
@@ -137,9 +173,16 @@ def generate_copy_options(
     }
     """
     client = _client()
-    input_list = [{"id": u["id"], "ko_text": u["ko_text"]} for u in copy_units]
 
-    prompt = f"""You are a creative director at an advertising agency, formerly a senior copywriter.
+    def _call(units: list[dict]) -> list[dict]:
+        input_list = []
+        for u in units:
+            entry: dict = {"id": u["id"], "ko_text": u["ko_text"]}
+            if u.get("shape_para_count", 1) > 1 and u.get("shape_text", "") != u["ko_text"]:
+                entry["shape_context"] = u["shape_text"]
+            input_list.append(entry)
+
+        prompt = f"""You are a creative director at an advertising agency, formerly a senior copywriter.
 
 [Context]
 Translating Korean TV commercial (TVC) copy for the US market.
@@ -159,6 +202,12 @@ For EACH line, produce:
 4. "cultural_flag": 미국 독자에게 낯선 한국 문화 요소나 표현이 있다면 한국어로 설명. 없으면 빈 문자열.
 5. "clarification": 한국어 의미가 모호하거나 여러 해석이 가능한 경우 어떤 해석을 택했는지 한국어로 설명. 명확하면 빈 문자열.
 
+[CRITICAL RULE — Multi-line text boxes]
+Some items include a "shape_context" field. This means ko_text is ONE LINE from a multi-line
+text box. Use shape_context to understand the full meaning, but generate options for ko_text only.
+You MUST return exactly one JSON object per input item — never skip, merge, or split items.
+The output array length must equal the input array length.
+
 Consider the full sequence together — maintain campaign/narrative flow across all lines.
 
 [Input]
@@ -177,12 +226,15 @@ Respond with ONLY a JSON array. Write notes/recommendation/cultural_flag/clarifi
   }}
 ]"""
 
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=8192,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    result = _extract_json(resp.content[0].text)
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return _extract_json(resp.content[0].text)
+
+    first = _call(copy_units)
+    result = _retry_missing(_call, copy_units, first)
     return {
         item["id"]: {
             "options": item.get("options", ["", "", ""]),
