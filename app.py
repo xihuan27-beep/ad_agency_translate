@@ -182,8 +182,51 @@ div.stButton > button[kind="primary"] {
   background:var(--cp) !important; border-color:var(--cp) !important; color:#fff !important;
 }
 
-/* Input radius */
-.stTextInput > div > div > input { border-radius:8px !important; font-size:14px !important; }
+/* ── Input fields: force light mode ────────────────────────────────────────── */
+/* text_input */
+.stTextInput > div > div > input {
+  background: #ffffff !important;
+  color: #101828 !important;
+  border: 1px solid #E4E7EC !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+}
+.stTextInput > div > div > input::placeholder { color: #98A2B3 !important; }
+.stTextInput > div > div > input:focus {
+  border-color: #0C2790 !important;
+  box-shadow: 0 0 0 3px rgba(12,39,144,0.12) !important;
+}
+/* text_area */
+.stTextArea > div > div > textarea {
+  background: #ffffff !important;
+  color: #101828 !important;
+  border: 1px solid #E4E7EC !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+}
+.stTextArea > div > div > textarea::placeholder { color: #98A2B3 !important; }
+.stTextArea > div > div > textarea:focus {
+  border-color: #0C2790 !important;
+  box-shadow: 0 0 0 3px rgba(12,39,144,0.12) !important;
+}
+/* select box */
+.stSelectbox > div > div > div {
+  background: #ffffff !important;
+  color: #101828 !important;
+  border: 1px solid #E4E7EC !important;
+  border-radius: 8px !important;
+}
+/* generic Streamlit input wrapper */
+[data-baseweb="input"] { background: #ffffff !important; }
+[data-baseweb="input"] input { background: transparent !important; color: #101828 !important; }
+[data-baseweb="textarea"] { background: #ffffff !important; }
+[data-baseweb="textarea"] textarea { background: transparent !important; color: #101828 !important; }
+/* label text above inputs */
+.stTextInput label, .stTextArea label, .stSelectbox label {
+  color: #667085 !important; font-size: 12.5px !important; font-weight: 500 !important;
+}
 
 /* Nav row */
 .navrow { display:flex;align-items:center;justify-content:space-between;padding:16px 0;gap:10px; }
