@@ -44,7 +44,29 @@ st.markdown("""<style>
   --font: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 body, .stApp, .main { background: var(--cbg) !important; font-family: var(--font) !important; }
+section[data-testid="stMain"] { background: var(--cbg) !important; }
 * { box-sizing: border-box; }
+
+/* Data editor — keep grid light */
+[data-testid="stDataFrameResizable"] {
+  border: 1px solid var(--cb) !important; border-radius: 8px !important;
+  overflow: hidden !important; background: var(--cw) !important;
+}
+.glideDataEditor, .dvn-scroller { background: var(--cw) !important; }
+
+/* File uploader dropzone — light gray, not black */
+[data-testid="stFileUploadDropzone"] {
+  background: var(--cbg) !important;
+  border: 1.5px dashed var(--cb) !important;
+  border-radius: 8px !important;
+}
+[data-testid="stFileUploadDropzone"] section { background: transparent !important; }
+[data-testid="stFileUploadDropzone"] p,
+[data-testid="stFileUploadDropzone"] span { color: var(--cm) !important; }
+
+/* Streamlit container wrappers — keep transparent */
+[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] { background: transparent !important; }
+[data-testid="column"] { background: transparent !important; }
 
 /* Top bar */
 .topbar {
