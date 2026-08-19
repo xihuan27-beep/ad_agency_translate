@@ -700,6 +700,45 @@ elif st.session_state.stage == "classify":
 
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # Manual text addition
+        st.markdown(
+            '<div class="card" style="margin-top:8px;">'
+            '<div class="card-title" style="margin-bottom:8px;">텍스트 직접 추가</div>',
+            unsafe_allow_html=True,
+        )
+        manual_text = st.text_input(
+            "한국어 텍스트",
+            key=f"manual_text_{active_slide}",
+            placeholder="인식되지 않은 텍스트를 입력하세요",
+            label_visibility="collapsed",
+        )
+        mc_cat, mc_add = st.columns([2, 1])
+        with mc_cat:
+            manual_cat = st.selectbox(
+                "분류",
+                ["발표용", "카피"],
+                key=f"manual_cat_{active_slide}",
+                label_visibility="collapsed",
+            )
+        with mc_add:
+            if st.button("추가", key=f"manual_add_{active_slide}", use_container_width=True, type="primary"):
+                if manual_text.strip():
+                    import time as _time
+                    new_id = f"manual_s{active_slide}_{int(_time.time()*1000)}"
+                    st.session_state.classified_units.append({
+                        "id": new_id,
+                        "slide_idx": active_slide,
+                        "shape_id": -1,
+                        "p_idx": 0,
+                        "ko_text": manual_text.strip(),
+                        "font_size": 14.0,
+                        "shape_text": manual_text.strip(),
+                        "shape_para_count": 1,
+                        "category": "presentation" if manual_cat == "발표용" else "copy",
+                    })
+                    rerun_needed = True
+        st.markdown('</div>', unsafe_allow_html=True)
+
         if rerun_needed:
             st.rerun()
 
