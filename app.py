@@ -731,80 +731,109 @@ elif st.session_state.stage == "review_2a":
                 st.stop()
         st.rerun()
 
-    total = len(pres_units)
-    idx = st.session_state.current_pres_idx
-    if idx >= total:
-        idx = total - 1
-        st.session_state.current_pres_idx = idx
-    if total == 0:
+    if not pres_units:
         st.info("발표용 텍스트가 없습니다.")
         if st.button("카피 선택으로 →"):
             st.session_state.stage = "review_2b"
             st.rerun()
         st.stop()
 
-    unit = pres_units[idx]
     trans = st.session_state.presentation_translations
-    item = trans.get(unit["id"], {})
-    en_text = item.get("en_text", "")
-    notes = item.get("notes", "")
-    clarification = item.get("clarification", "")
-    slide_idx = unit["slide_idx"]
 
-    st.markdown('<div style="padding:24px 32px;">', unsafe_allow_html=True)
+    # Group by slide and navigate slide-by-slide
+    pres_by_slide = defaultdict(list)
+    for u in pres_units:
+        pres_by_slide[u["slide_idx"]].append(u)
+    slide_keys = sorted(pres_by_slide.keys())
+    total_slides = len(slide_keys)
 
-    # Slide bezel (full width)
-    st.markdown('<div class="bezel">', unsafe_allow_html=True)
-    st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="bezel-caption">{_html.escape(unit["ko_text"])}</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    slide_pos = st.session_state.current_pres_idx
+    if slide_pos >= total_slides:
+        slide_pos = total_slides - 1
+        st.session_state.current_pres_idx = slide_pos
+    slide_idx = slide_keys[slide_pos]
+    slide_units = pres_by_slide[slide_idx]
 
-    # Notes box
-    if notes or clarification:
-        note_content = notes or clarification
+    # ── Two-column layout ───────────────────────────────────────────────────
+    col_img, col_panel = st.columns([2, 3])
+
+    with col_img:
         st.markdown(
-            f'<div class="notebox"><div class="notebox-icon">📝</div>'
-            f'<div>{_html.escape(note_content)}</div></div>',
+            '<div style="padding:16px 0 16px 24px;">'
+            '<div class="bezel">',
+            unsafe_allow_html=True,
+        )
+        st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="bezel-caption">슬라이드 {slide_idx + 1}</div>'
+            '</div></div>',
             unsafe_allow_html=True,
         )
 
-    # Translation box
-    st.markdown(
-        f'<div class="transbox">{_html.escape(en_text) if en_text else "—"}</div>',
-        unsafe_allow_html=True,
-    )
+    with col_panel:
+        st.markdown(
+            '<div style="padding:16px 24px 0 8px;max-height:calc(100vh - 180px);'
+            'overflow-y:auto;">',
+            unsafe_allow_html=True,
+        )
+        for unit in slide_units:
+            item = trans.get(unit["id"], {})
+            en_text = item.get("en_text", "")
+            notes = item.get("notes", "") or item.get("clarification", "")
+            st.markdown(
+                f'<div style="margin-bottom:14px;border:1px solid #E4E7EC;'
+                f'border-radius:10px;overflow:hidden;">'
+                # Korean row
+                f'<div style="background:#F2F4F7;padding:10px 14px;'
+                f'font-size:13.5px;color:#344054;line-height:1.55;">'
+                f'{_html.escape(unit["ko_text"])}</div>'
+                # English row
+                f'<div style="background:#E8EDFB;padding:10px 14px;'
+                f'font-size:14px;font-weight:600;color:#0C2790;line-height:1.55;">'
+                f'{_html.escape(en_text) if en_text else "—"}</div>'
+                + (
+                    f'<div style="background:#FFFBEA;padding:8px 14px;'
+                    f'font-size:12px;color:#667085;line-height:1.5;">'
+                    f'📝 {_html.escape(notes)}</div>'
+                    if notes else ""
+                )
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # AI refinement
-    user_msg = st.chat_input(f"AI에게 번역 수정 요청하기 ({idx+1}/{total})", key="chat_2a")
+    # ── AI chat refinement ──────────────────────────────────────────────────
+    user_msg = st.chat_input(
+        f"이 슬라이드 번역 수정 요청 ({slide_pos+1}/{total_slides} 슬라이드)", key="chat_2a"
+    )
     if user_msg:
         with st.spinner("번역 수정 중..."):
-            try:
-                refined = chat_refine_copy(unit["ko_text"], en_text, user_msg, _build_context())
-                st.session_state.presentation_translations[unit["id"]] = {
-                    **item,
-                    "en_text": refined,
-                }
-            except Exception as e:
-                st.error(f"오류: {e}")
+            for unit in slide_units:
+                item = trans.get(unit["id"], {})
+                en_text = item.get("en_text", "")
+                try:
+                    refined = chat_refine_copy(unit["ko_text"], en_text, user_msg, _build_context())
+                    st.session_state.presentation_translations[unit["id"]] = {
+                        **item, "en_text": refined,
+                    }
+                except Exception:
+                    pass
         st.rerun()
 
-    # Navigation
+    # ── Navigation bar ──────────────────────────────────────────────────────
     c_prev, c_counter, c_next_btn, _, c_next_stage = st.columns([1, 1.5, 1, 3, 2])
     with c_prev:
-        if st.button("＜", key="2a_prev", disabled=(idx == 0), use_container_width=True):
+        if st.button("＜", key="2a_prev", disabled=(slide_pos == 0), use_container_width=True):
             st.session_state.current_pres_idx -= 1
             st.rerun()
     with c_next_btn:
-        if st.button("＞", key="2a_next", disabled=(idx >= total - 1), use_container_width=True):
+        if st.button("＞", key="2a_next", disabled=(slide_pos >= total_slides - 1), use_container_width=True):
             st.session_state.current_pres_idx += 1
             st.rerun()
     with c_counter:
         st.markdown(
             f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
-            f'color:#667085;font-weight:500;">{idx+1}/{total}</div>',
+            f'color:#667085;font-weight:500;">{slide_pos+1}/{total_slides} 슬라이드</div>',
             unsafe_allow_html=True,
         )
     with c_next_stage:
@@ -812,8 +841,6 @@ elif st.session_state.stage == "review_2a":
         if st.button(next_label, key="2a_done", type="primary", use_container_width=True):
             st.session_state.stage = "review_2b" if st.session_state.copy_units else "download"
             st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Stage: review_2b ──────────────────────────────────────────────────────────
