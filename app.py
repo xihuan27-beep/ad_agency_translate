@@ -891,62 +891,80 @@ elif st.session_state.stage == "review_2b":
         ("직역", "원문 의미 중심"),
     ]
 
-    st.markdown('<div style="padding:24px 32px;">', unsafe_allow_html=True)
+    # ── Two-column layout ───────────────────────────────────────────────────
+    col_img, col_panel = st.columns([2, 3])
 
-    # Slide bezel
-    st.markdown('<div class="bezel">', unsafe_allow_html=True)
-    st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="bezel-caption">{_html.escape(unit["ko_text"])}</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Notes box
-    note_content = notes or clarification or cultural_flag
-    if note_content:
+    with col_img:
         st.markdown(
-            f'<div class="notebox"><div class="notebox-icon">📝</div>'
-            f'<div>{_html.escape(note_content)}</div></div>',
+            '<div style="padding:16px 0 16px 24px;">'
+            '<div class="bezel">',
+            unsafe_allow_html=True,
+        )
+        st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="bezel-caption">슬라이드 {slide_idx + 1}</div>'
+            '</div></div>',
             unsafe_allow_html=True,
         )
 
-    # Copy option rows
-    rerun_sel = False
-    for i, (opt_name, opt_sub) in enumerate(OPTS_META):
-        opt_text = options[i] if i < len(options) else ""
-        is_sel = (current_sel == opt_text)
-        sel_cls = "copyrow sel" if is_sel else "copyrow"
-        star = "⭐" if is_sel else "☆"
+    with col_panel:
+        st.markdown('<div style="padding:16px 24px 0 8px;">', unsafe_allow_html=True)
 
-        c_row, c_star = st.columns([10, 1])
-        with c_row:
+        # Korean source text header
+        st.markdown(
+            f'<div style="background:#F2F4F7;border-radius:8px;padding:10px 14px;'
+            f'font-size:14px;color:#344054;line-height:1.55;margin-bottom:12px;">'
+            f'{_html.escape(unit["ko_text"])}</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Notes
+        note_content = notes or clarification or cultural_flag
+        if note_content:
             st.markdown(
-                f'<div class="{sel_cls}">'
-                f'<div class="cr-label"><div class="cr-lname">{opt_name}</div>'
-                f'<div class="cr-lsub">{opt_sub}</div></div>'
-                f'<div class="cr-text">{_html.escape(opt_text)}</div>'
-                f'</div>',
+                f'<div class="notebox"><div class="notebox-icon">📝</div>'
+                f'<div style="font-size:13px;">{_html.escape(note_content)}</div></div>',
                 unsafe_allow_html=True,
             )
-        with c_star:
-            if st.button(star, key=f"star_{unit['id']}_{i}"):
-                st.session_state.copy_selections[unit["id"]] = opt_text
-                rerun_sel = True
 
-    if rerun_sel:
-        st.rerun()
+        # Copy option rows
+        rerun_sel = False
+        for i, (opt_name, opt_sub) in enumerate(OPTS_META):
+            opt_text = options[i] if i < len(options) else ""
+            is_sel = (current_sel == opt_text)
+            sel_cls = "copyrow sel" if is_sel else "copyrow"
+            star = "⭐" if is_sel else "☆"
 
-    # Recommendation box
-    if recommendation:
-        st.markdown(
-            f'<div class="recbox"><div style="font-size:18px;flex-shrink:0;">📌</div>'
-            f'<div><strong>추천 이유:</strong> {_html.escape(recommendation)}</div></div>',
-            unsafe_allow_html=True,
-        )
+            c_row, c_star = st.columns([10, 1])
+            with c_row:
+                st.markdown(
+                    f'<div class="{sel_cls}">'
+                    f'<div class="cr-label"><div class="cr-lname">{opt_name}</div>'
+                    f'<div class="cr-lsub">{opt_sub}</div></div>'
+                    f'<div class="cr-text">{_html.escape(opt_text)}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with c_star:
+                if st.button(star, key=f"star_{unit['id']}_{i}"):
+                    st.session_state.copy_selections[unit["id"]] = opt_text
+                    rerun_sel = True
 
-    # AI refinement
-    user_msg = st.chat_input(f"AI에게 번역 수정 요청하기 ({idx+1}/{total})", key="chat_2b")
+        if rerun_sel:
+            st.rerun()
+
+        # Recommendation box
+        if recommendation:
+            st.markdown(
+                f'<div class="recbox"><div style="font-size:18px;flex-shrink:0;">📌</div>'
+                f'<div><strong>추천 이유:</strong> {_html.escape(recommendation)}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── AI chat ─────────────────────────────────────────────────────────────
+    user_msg = st.chat_input(f"AI에게 카피 수정 요청하기 ({idx+1}/{total})", key="chat_2b")
     if user_msg:
         with st.spinner("카피 수정 중..."):
             try:
@@ -956,7 +974,7 @@ elif st.session_state.stage == "review_2b":
                 st.error(f"오류: {e}")
         st.rerun()
 
-    # Navigation
+    # ── Navigation ───────────────────────────────────────────────────────────
     c_prev, c_counter, c_next_btn, _, c_next_stage = st.columns([1, 1.5, 1, 3, 2])
     with c_prev:
         if st.button("＜", key="2b_prev", disabled=(idx == 0), use_container_width=True):
@@ -969,15 +987,13 @@ elif st.session_state.stage == "review_2b":
     with c_counter:
         st.markdown(
             f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
-            f'color:#667085;font-weight:500;">{idx+1}/{total}</div>',
+            f'color:#667085;font-weight:500;">{idx+1}/{total} 카피</div>',
             unsafe_allow_html=True,
         )
     with c_next_stage:
         if st.button("다음 단계: 다운로드 →", key="2b_done", type="primary", use_container_width=True):
             st.session_state.stage = "download"
             st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Stage: download ───────────────────────────────────────────────────────────
