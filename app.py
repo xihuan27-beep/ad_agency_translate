@@ -906,13 +906,19 @@ elif st.session_state.stage == "review_2a":
     _has_copy = bool(st.session_state.copy_units)
     _n_copy = len(st.session_state.copy_units)
     _next_label = f"다음 단계: 카피 선택 ({_n_copy}개) →" if _has_copy else "다음 단계: 다운로드 →"
-    if st.button(_next_label, key="2a_done", type="primary", use_container_width=True):
-        if _has_copy:
-            st.session_state.copy_options_loaded = False
-            st.session_state.stage = "review_2b"
-        else:
-            st.session_state.stage = "download"
-        st.rerun()
+    c_2a_back, c_2a_fwd = st.columns([1, 2])
+    with c_2a_back:
+        if st.button("← 분류로 돌아가기", key="2a_back", use_container_width=True):
+            st.session_state.stage = "classify"
+            st.rerun()
+    with c_2a_fwd:
+        if st.button(_next_label, key="2a_done", type="primary", use_container_width=True):
+            if _has_copy:
+                st.session_state.copy_options_loaded = False
+                st.session_state.stage = "review_2b"
+            else:
+                st.session_state.stage = "download"
+            st.rerun()
 
 
 # ── Stage: review_2b ──────────────────────────────────────────────────────────
@@ -1075,6 +1081,11 @@ elif st.session_state.stage == "review_2b":
             f'color:#667085;font-weight:500;">{idx+1}/{total} 카피</div>',
             unsafe_allow_html=True,
         )
+    with _:
+        if st.button("← 발표용 감수로", key="2b_back", use_container_width=True):
+            _back_stage = "review_2a" if st.session_state.presentation_units else "classify"
+            st.session_state.stage = _back_stage
+            st.rerun()
     with c_next_stage:
         if st.button("다음 단계: 다운로드 →", key="2b_done", type="primary", use_container_width=True):
             st.session_state.stage = "download"
