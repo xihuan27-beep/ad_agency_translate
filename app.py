@@ -231,18 +231,22 @@ div.stButton > button[kind="primary"] {
 /* Nav row */
 .navrow { display:flex;align-items:center;justify-content:space-between;padding:16px 0;gap:10px; }
 
-/* Sticky left column — slide preview stays fixed while right scrolls */
+/* Fixed-height two-column layout: left stays put, right scrolls internally */
 [data-testid="stHorizontalBlock"] {
   align-items: flex-start !important;
 }
-.sticky-slide {
-  position: sticky;
-  top: 116px;   /* topbar 64px + steprail 52px */
+.review-img-panel {
+  height: calc(100vh - 260px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 16px 0 16px 24px;
+  overflow: hidden;
 }
 .scroll-panel {
-  max-height: calc(100vh - 180px);
+  height: calc(100vh - 260px);
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 16px 8px 100px 8px;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -812,7 +816,7 @@ elif st.session_state.stage == "review_2a":
 
     with col_img:
         st.markdown(
-            '<div class="sticky-slide" style="padding:16px 0 16px 24px;">'
+            '<div class="review-img-panel">'
             '<div class="bezel">',
             unsafe_allow_html=True,
         )
@@ -824,7 +828,7 @@ elif st.session_state.stage == "review_2a":
         )
 
     with col_panel:
-        st.markdown('<div class="scroll-panel" style="padding:16px 8px 0 8px;">', unsafe_allow_html=True)
+        st.markdown('<div class="scroll-panel">', unsafe_allow_html=True)
         for unit in slide_units:
             item = trans.get(unit["id"], {})
             en_text = item.get("en_text", "")
