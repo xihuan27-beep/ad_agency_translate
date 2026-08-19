@@ -230,6 +230,20 @@ div.stButton > button[kind="primary"] {
 
 /* Nav row */
 .navrow { display:flex;align-items:center;justify-content:space-between;padding:16px 0;gap:10px; }
+
+/* Sticky left column — slide preview stays fixed while right scrolls */
+[data-testid="stHorizontalBlock"] {
+  align-items: flex-start !important;
+}
+.sticky-slide {
+  position: sticky;
+  top: 116px;   /* topbar 64px + steprail 52px */
+}
+.scroll-panel {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
 </style>""", unsafe_allow_html=True)
 
 
@@ -759,7 +773,7 @@ elif st.session_state.stage == "review_2a":
 
     with col_img:
         st.markdown(
-            '<div style="padding:16px 0 16px 24px;">'
+            '<div class="sticky-slide" style="padding:16px 0 16px 24px;">'
             '<div class="bezel">',
             unsafe_allow_html=True,
         )
@@ -771,35 +785,44 @@ elif st.session_state.stage == "review_2a":
         )
 
     with col_panel:
-        st.markdown(
-            '<div style="padding:16px 24px 0 8px;max-height:calc(100vh - 180px);'
-            'overflow-y:auto;">',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="scroll-panel" style="padding:16px 8px 0 8px;">', unsafe_allow_html=True)
         for unit in slide_units:
             item = trans.get(unit["id"], {})
             en_text = item.get("en_text", "")
             notes = item.get("notes", "") or item.get("clarification", "")
+            uid = unit["id"]
+
+            # Korean source
             st.markdown(
-                f'<div style="margin-bottom:14px;border:1px solid #E4E7EC;'
-                f'border-radius:10px;overflow:hidden;">'
-                # Korean row
-                f'<div style="background:#F2F4F7;padding:10px 14px;'
-                f'font-size:13.5px;color:#344054;line-height:1.55;">'
-                f'{_html.escape(unit["ko_text"])}</div>'
-                # English row
-                f'<div style="background:#E8EDFB;padding:10px 14px;'
-                f'font-size:14px;font-weight:600;color:#0C2790;line-height:1.55;">'
-                f'{_html.escape(en_text) if en_text else "—"}</div>'
-                + (
-                    f'<div style="background:#FFFBEA;padding:8px 14px;'
-                    f'font-size:12px;color:#667085;line-height:1.5;">'
-                    f'📝 {_html.escape(notes)}</div>'
-                    if notes else ""
-                )
-                + '</div>',
+                f'<div style="background:#F2F4F7;border-radius:8px 8px 0 0;'
+                f'padding:10px 14px;font-size:13.5px;color:#344054;line-height:1.55;'
+                f'border:1px solid #E4E7EC;border-bottom:none;">'
+                f'{_html.escape(unit["ko_text"])}</div>',
                 unsafe_allow_html=True,
             )
+            # Editable English translation
+            new_val = st.text_area(
+                label="",
+                value=en_text,
+                key=f"edit_en_{uid}",
+                height=80,
+                label_visibility="collapsed",
+            )
+            if new_val != en_text:
+                st.session_state.presentation_translations[uid] = {
+                    **item, "en_text": new_val,
+                }
+            # Notes
+            if notes:
+                st.markdown(
+                    f'<div style="background:#FFFBEA;border-radius:0 0 8px 8px;'
+                    f'padding:8px 14px;font-size:12px;color:#667085;line-height:1.5;'
+                    f'border:1px solid #E4E7EC;border-top:none;margin-bottom:14px;">'
+                    f'📝 {_html.escape(notes)}</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown('<div style="margin-bottom:14px;"></div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ── AI chat refinement ──────────────────────────────────────────────────
