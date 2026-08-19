@@ -21,11 +21,11 @@ def _iter_shapes(shapes):
 def _extract_from_text_frame(tf, s_idx, shape_id, prefix, text_units):
     """Append text units from a single text frame."""
     paragraphs = tf.paragraphs
-    shape_lines = [p.text.strip() for p in paragraphs if len(p.text.strip()) >= 5]
+    shape_lines = [p.text.strip() for p in paragraphs if len(p.text.strip()) >= 2]
     shape_text = "\n".join(shape_lines)
     for p_idx, para in enumerate(paragraphs):
         text = para.text.strip()
-        if len(text) < 5:
+        if len(text) < 2:
             continue
         font_size = 14.0
         if para.runs and para.runs[0].font.size:
