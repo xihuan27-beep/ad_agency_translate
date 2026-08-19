@@ -231,18 +231,13 @@ div.stButton > button[kind="primary"] {
 /* Nav row */
 .navrow { display:flex;align-items:center;justify-content:space-between;padding:16px 0;gap:10px; }
 
-/* Left/right split: left column stays put, right panel scrolls via st.container */
 [data-testid="stHorizontalBlock"] {
   align-items: flex-start !important;
 }
-/* st.container(height=X, border=False) renders as stVerticalBlockBorderWrapper.
-   Override to use viewport-relative height instead of the fixed pixel value. */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-  height: calc(100vh - 310px) !important;
-  border: none !important;
-}
 .review-img-panel {
   padding: 16px 0 16px 24px;
+  position: sticky;
+  top: 72px;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -824,44 +819,50 @@ elif st.session_state.stage == "review_2a":
         )
 
     with col_panel:
-        with st.container(height=580, border=False):
-            for unit in slide_units:
-                item = trans.get(unit["id"], {})
-                en_text = item.get("en_text", "")
-                notes = item.get("notes", "") or item.get("clarification", "")
-                uid = unit["id"]
+        # Check if translations are actually populated — show retry if empty
+        _n_translated = sum(1 for u in slide_units if trans.get(u["id"], {}).get("en_text", "").strip())
+        if len(slide_units) > 0 and _n_translated == 0:
+            st.warning(f"번역 결과가 없습니다 (0/{len(slide_units)}). 번역을 다시 실행해주세요.")
+            if st.button("번역 재실행", key="retry_trans", type="primary"):
+                st.session_state.translations_loaded = False
+                st.rerun()
+        for unit in slide_units:
+            item = trans.get(unit["id"], {})
+            en_text = item.get("en_text", "")
+            notes = item.get("notes", "") or item.get("clarification", "")
+            uid = unit["id"]
 
-                # Korean source
+            # Korean source
+            st.markdown(
+                f'<div style="background:#F2F4F7;border-radius:8px 8px 0 0;'
+                f'padding:10px 14px;font-size:13.5px;color:#344054;line-height:1.55;'
+                f'border:1px solid #E4E7EC;border-bottom:none;">'
+                f'{_html.escape(unit["ko_text"])}</div>',
+                unsafe_allow_html=True,
+            )
+            # Editable English translation
+            new_val = st.text_area(
+                label="",
+                value=en_text,
+                key=f"edit_en_{uid}",
+                height=80,
+                label_visibility="collapsed",
+            )
+            if new_val != en_text:
+                st.session_state.presentation_translations[uid] = {
+                    **item, "en_text": new_val,
+                }
+            # Notes
+            if notes:
                 st.markdown(
-                    f'<div style="background:#F2F4F7;border-radius:8px 8px 0 0;'
-                    f'padding:10px 14px;font-size:13.5px;color:#344054;line-height:1.55;'
-                    f'border:1px solid #E4E7EC;border-bottom:none;">'
-                    f'{_html.escape(unit["ko_text"])}</div>',
+                    f'<div style="background:#FFFBEA;border-radius:0 0 8px 8px;'
+                    f'padding:8px 14px;font-size:12px;color:#667085;line-height:1.5;'
+                    f'border:1px solid #E4E7EC;border-top:none;margin-bottom:14px;">'
+                    f'📝 {_html.escape(notes)}</div>',
                     unsafe_allow_html=True,
                 )
-                # Editable English translation
-                new_val = st.text_area(
-                    label="",
-                    value=en_text,
-                    key=f"edit_en_{uid}",
-                    height=80,
-                    label_visibility="collapsed",
-                )
-                if new_val != en_text:
-                    st.session_state.presentation_translations[uid] = {
-                        **item, "en_text": new_val,
-                    }
-                # Notes
-                if notes:
-                    st.markdown(
-                        f'<div style="background:#FFFBEA;border-radius:0 0 8px 8px;'
-                        f'padding:8px 14px;font-size:12px;color:#667085;line-height:1.5;'
-                        f'border:1px solid #E4E7EC;border-top:none;margin-bottom:14px;">'
-                        f'📝 {_html.escape(notes)}</div>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown('<div style="margin-bottom:14px;"></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div style="margin-bottom:14px;"></div>', unsafe_allow_html=True)
 
     # ── AI chat refinement ──────────────────────────────────────────────────
     user_msg = st.chat_input(
