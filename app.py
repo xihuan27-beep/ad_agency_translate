@@ -1086,8 +1086,8 @@ elif st.session_state.stage == "review_2b":
                 st.error(f"오류: {e}")
         st.rerun()
 
-    # ── Navigation ───────────────────────────────────────────────────────────
-    c_prev, c_counter, c_next_btn, _, c_next_stage = st.columns([1, 1.5, 1, 3, 2])
+    # ── Navigation: prev/next copy ──────────────────────────────────────────
+    c_prev, c_counter, c_next_btn = st.columns([1, 1.5, 1])
     with c_prev:
         if st.button("＜", key="2b_prev", disabled=(idx == 0), use_container_width=True):
             st.session_state.current_copy_idx -= 1
@@ -1102,12 +1102,15 @@ elif st.session_state.stage == "review_2b":
             f'color:#667085;font-weight:500;">{idx+1}/{total} 카피</div>',
             unsafe_allow_html=True,
         )
-    with _:
+
+    # ── Navigation: stage back/forward ──────────────────────────────────────
+    c_2b_back, c_2b_fwd = st.columns([1, 2])
+    with c_2b_back:
         if st.button("← 발표용 감수로", key="2b_back", use_container_width=True):
             _back_stage = "review_2a" if st.session_state.presentation_units else "classify"
             st.session_state.stage = _back_stage
             st.rerun()
-    with c_next_stage:
+    with c_2b_fwd:
         if st.button("다음 단계: 다운로드 →", key="2b_done", type="primary", use_container_width=True):
             st.session_state.stage = "download"
             st.rerun()
