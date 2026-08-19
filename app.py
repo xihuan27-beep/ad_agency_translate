@@ -883,7 +883,7 @@ elif st.session_state.stage == "review_2a":
         st.rerun()
 
     # ── Navigation bar ──────────────────────────────────────────────────────
-    c_prev, c_counter, c_next_btn, _, c_next_stage = st.columns([1, 1.5, 1, 3, 2])
+    c_prev, c_counter, c_next_btn = st.columns([1, 1.5, 1])
     with c_prev:
         if st.button("＜", key="2a_prev", disabled=(slide_pos == 0), use_container_width=True):
             st.session_state.current_pres_idx -= 1
@@ -898,11 +898,17 @@ elif st.session_state.stage == "review_2a":
             f'color:#667085;font-weight:500;">{slide_pos+1}/{total_slides} 슬라이드</div>',
             unsafe_allow_html=True,
         )
-    with c_next_stage:
-        next_label = "다음 단계: 카피 선택 →" if st.session_state.copy_units else "다음 단계: 다운로드 →"
-        if st.button(next_label, key="2a_done", type="primary", use_container_width=True):
-            st.session_state.stage = "review_2b" if st.session_state.copy_units else "download"
-            st.rerun()
+
+    _has_copy = bool(st.session_state.copy_units)
+    _n_copy = len(st.session_state.copy_units)
+    _next_label = f"다음 단계: 카피 선택 ({_n_copy}개) →" if _has_copy else "다음 단계: 다운로드 →"
+    if st.button(_next_label, key="2a_done", type="primary", use_container_width=True):
+        if _has_copy:
+            st.session_state.copy_options_loaded = False
+            st.session_state.stage = "review_2b"
+        else:
+            st.session_state.stage = "download"
+        st.rerun()
 
 
 # ── Stage: review_2b ──────────────────────────────────────────────────────────
@@ -911,7 +917,12 @@ elif st.session_state.stage == "review_2b":
     copy_units = st.session_state.copy_units
 
     if not st.session_state.copy_options_loaded:
-        with st.spinner("AI가 카피 옵션을 생성하는 중..."):
+        n_copy = len(copy_units)
+        st.markdown(
+            f'<div style="padding:24px 32px 8px;">',
+            unsafe_allow_html=True,
+        )
+        with st.spinner(f"AI가 카피 옵션을 생성하는 중... ({n_copy}개 카피 항목)"):
             try:
                 opts = generate_copy_options(copy_units, _build_context())
                 st.session_state.copy_options = opts
@@ -921,7 +932,15 @@ elif st.session_state.stage == "review_2b":
                 }
                 st.session_state.copy_options_loaded = True
             except Exception as e:
-                st.error(f"카피 생성 오류: {e}")
+                st.error(f"카피 옵션 생성 중 오류가 발생했습니다: {e}")
+                st.markdown(
+                    '<div style="margin-top:8px;font-size:13px;color:#667085;">' +
+                    f'카피 항목 수: {n_copy}개' +
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("다시 시도", key="retry_copy", type="primary"):
+                    st.rerun()
                 st.stop()
         st.rerun()
 
