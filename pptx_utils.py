@@ -1,4 +1,7 @@
 import io
+import os
+import subprocess
+import tempfile
 from pptx import Presentation
 from pptx.util import Pt
 from pptx.enum.text import MSO_AUTO_SIZE
@@ -88,6 +91,44 @@ def apply_translations(file_bytes: bytes, translations: dict[str, str], font_nam
     out = io.BytesIO()
     prs.save(out)
     return out.getvalue()
+
+
+def render_slides_to_images(file_bytes: bytes) -> list[bytes]:
+    """Convert each PPTX slide to a PNG image using LibreOffice headless.
+
+    Returns a list of PNG bytes, one per slide (in order).
+    Returns [] if LibreOffice is not available.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pptx_path = os.path.join(tmpdir, "input.pptx")
+        with open(pptx_path, "wb") as f:
+            f.write(file_bytes)
+
+        try:
+            subprocess.run(
+                [
+                    "libreoffice", "--headless",
+                    "--convert-to", "png",
+                    "--outdir", tmpdir,
+                    pptx_path,
+                ],
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            return []
+
+        # LibreOffice names output files: input.png (1 slide) or input1.png input2.png ...
+        pngs = sorted(
+            [f for f in os.listdir(tmpdir) if f.endswith(".png")],
+            key=lambda n: (len(n), n),  # lexicographic stable sort by length then name
+        )
+        result = []
+        for name in pngs:
+            with open(os.path.join(tmpdir, name), "rb") as f:
+                result.append(f.read())
+        return result
 
 
 def extract_reference_texts(file_bytes: bytes) -> list[str]:
