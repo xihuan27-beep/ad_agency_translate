@@ -231,22 +231,18 @@ div.stButton > button[kind="primary"] {
 /* Nav row */
 .navrow { display:flex;align-items:center;justify-content:space-between;padding:16px 0;gap:10px; }
 
-/* Fixed-height two-column layout: left stays put, right scrolls internally */
+/* Left/right split: left column stays put, right panel scrolls via st.container */
 [data-testid="stHorizontalBlock"] {
   align-items: flex-start !important;
 }
-.review-img-panel {
-  height: calc(100vh - 260px);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  padding: 16px 0 16px 24px;
-  overflow: hidden;
+/* st.container(height=X, border=False) renders as stVerticalBlockBorderWrapper.
+   Override to use viewport-relative height instead of the fixed pixel value. */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+  height: calc(100vh - 310px) !important;
+  border: none !important;
 }
-.scroll-panel {
-  height: calc(100vh - 260px);
-  overflow-y: auto;
-  padding: 16px 8px 100px 8px;
+.review-img-panel {
+  padding: 16px 0 16px 24px;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -828,45 +824,44 @@ elif st.session_state.stage == "review_2a":
         )
 
     with col_panel:
-        st.markdown('<div class="scroll-panel">', unsafe_allow_html=True)
-        for unit in slide_units:
-            item = trans.get(unit["id"], {})
-            en_text = item.get("en_text", "")
-            notes = item.get("notes", "") or item.get("clarification", "")
-            uid = unit["id"]
+        with st.container(height=580, border=False):
+            for unit in slide_units:
+                item = trans.get(unit["id"], {})
+                en_text = item.get("en_text", "")
+                notes = item.get("notes", "") or item.get("clarification", "")
+                uid = unit["id"]
 
-            # Korean source
-            st.markdown(
-                f'<div style="background:#F2F4F7;border-radius:8px 8px 0 0;'
-                f'padding:10px 14px;font-size:13.5px;color:#344054;line-height:1.55;'
-                f'border:1px solid #E4E7EC;border-bottom:none;">'
-                f'{_html.escape(unit["ko_text"])}</div>',
-                unsafe_allow_html=True,
-            )
-            # Editable English translation
-            new_val = st.text_area(
-                label="",
-                value=en_text,
-                key=f"edit_en_{uid}",
-                height=80,
-                label_visibility="collapsed",
-            )
-            if new_val != en_text:
-                st.session_state.presentation_translations[uid] = {
-                    **item, "en_text": new_val,
-                }
-            # Notes
-            if notes:
+                # Korean source
                 st.markdown(
-                    f'<div style="background:#FFFBEA;border-radius:0 0 8px 8px;'
-                    f'padding:8px 14px;font-size:12px;color:#667085;line-height:1.5;'
-                    f'border:1px solid #E4E7EC;border-top:none;margin-bottom:14px;">'
-                    f'📝 {_html.escape(notes)}</div>',
+                    f'<div style="background:#F2F4F7;border-radius:8px 8px 0 0;'
+                    f'padding:10px 14px;font-size:13.5px;color:#344054;line-height:1.55;'
+                    f'border:1px solid #E4E7EC;border-bottom:none;">'
+                    f'{_html.escape(unit["ko_text"])}</div>',
                     unsafe_allow_html=True,
                 )
-            else:
-                st.markdown('<div style="margin-bottom:14px;"></div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+                # Editable English translation
+                new_val = st.text_area(
+                    label="",
+                    value=en_text,
+                    key=f"edit_en_{uid}",
+                    height=80,
+                    label_visibility="collapsed",
+                )
+                if new_val != en_text:
+                    st.session_state.presentation_translations[uid] = {
+                        **item, "en_text": new_val,
+                    }
+                # Notes
+                if notes:
+                    st.markdown(
+                        f'<div style="background:#FFFBEA;border-radius:0 0 8px 8px;'
+                        f'padding:8px 14px;font-size:12px;color:#667085;line-height:1.5;'
+                        f'border:1px solid #E4E7EC;border-top:none;margin-bottom:14px;">'
+                        f'📝 {_html.escape(notes)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown('<div style="margin-bottom:14px;"></div>', unsafe_allow_html=True)
 
     # ── AI chat refinement ──────────────────────────────────────────────────
     user_msg = st.chat_input(
@@ -954,7 +949,13 @@ elif st.session_state.stage == "review_2b":
                 st.stop()
         st.rerun()
 
-    total = len(copy_units)
+    # Group duplicate ko_text — user selects once for all occurrences
+    _ko_groups: dict = {}
+    for u in copy_units:
+        _ko_groups.setdefault(u["ko_text"], []).append(u)
+    unique_groups = list(_ko_groups.values())
+
+    total = len(unique_groups)
     idx = st.session_state.current_copy_idx
     if idx >= total:
         idx = total - 1
@@ -966,7 +967,8 @@ elif st.session_state.stage == "review_2b":
             st.rerun()
         st.stop()
 
-    unit = copy_units[idx]
+    group = unique_groups[idx]
+    unit = group[0]  # representative unit for copy_options lookup
     unit_data = st.session_state.copy_options.get(unit["id"], {})
     options = unit_data.get("options", ["", "", ""])
     notes = unit_data.get("notes", "")
@@ -975,6 +977,7 @@ elif st.session_state.stage == "review_2b":
     clarification = unit_data.get("clarification", "")
     current_sel = st.session_state.copy_selections.get(unit["id"], options[0] if options else "")
     slide_idx = unit["slide_idx"]
+    dup_slides = sorted({u["slide_idx"] for u in group})
 
     OPTS_META = [
         ("의역", "Feel, rhythm, impact 우선"),
@@ -992,8 +995,12 @@ elif st.session_state.stage == "review_2b":
             unsafe_allow_html=True,
         )
         st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
+        _cap_extra = ""
+        if len(dup_slides) > 1:
+            _slides_str = ", ".join(str(s + 1) for s in dup_slides)
+            _cap_extra = f' (슬라이드 {_slides_str}에 반복)'
         st.markdown(
-            f'<div class="bezel-caption">슬라이드 {slide_idx + 1}</div>'
+            f'<div class="bezel-caption">슬라이드 {slide_idx + 1}{_cap_extra}</div>'
             '</div></div>',
             unsafe_allow_html=True,
         )
@@ -1008,6 +1015,17 @@ elif st.session_state.stage == "review_2b":
             f'{_html.escape(unit["ko_text"])}</div>',
             unsafe_allow_html=True,
         )
+
+        # Duplicate notice
+        if len(dup_slides) > 1:
+            _slides_str = ", ".join(str(s + 1) for s in dup_slides)
+            st.markdown(
+                f'<div style="font-size:12px;color:#667085;border-radius:6px;'
+                f'padding:6px 12px;margin-bottom:10px;background:#F9F5FF;'
+                f'border:1px solid #D6BBFB;">'
+                f'🔁 슬라이드 {_slides_str}에 동일 카피 — 한 번 선택하면 모두 적용됩니다</div>',
+                unsafe_allow_html=True,
+            )
 
         # Notes
         note_content = notes or clarification or cultural_flag
@@ -1038,7 +1056,8 @@ elif st.session_state.stage == "review_2b":
                 )
             with c_star:
                 if st.button(star, key=f"star_{unit['id']}_{i}"):
-                    st.session_state.copy_selections[unit["id"]] = opt_text
+                    for _gu in group:
+                        st.session_state.copy_selections[_gu["id"]] = opt_text
                     rerun_sel = True
 
         if rerun_sel:
@@ -1060,7 +1079,8 @@ elif st.session_state.stage == "review_2b":
         with st.spinner("카피 수정 중..."):
             try:
                 refined = chat_refine_copy(unit["ko_text"], current_sel, user_msg, _build_context())
-                st.session_state.copy_selections[unit["id"]] = refined
+                for _gu in group:
+                    st.session_state.copy_selections[_gu["id"]] = refined
             except Exception as e:
                 st.error(f"오류: {e}")
         st.rerun()
