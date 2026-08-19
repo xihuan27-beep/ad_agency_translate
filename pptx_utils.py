@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import subprocess
 import tempfile
 from pptx import Presentation
@@ -127,35 +128,48 @@ def apply_translations(file_bytes: bytes, translations: dict[str, str], font_nam
 
 
 def render_slides_to_images(file_bytes: bytes) -> list[bytes]:
-    """Convert each PPTX slide to a PNG image using LibreOffice headless.
+    """Convert each PPTX slide to a PNG image.
 
-    Returns a list of PNG bytes, one per slide (in order).
-    Returns [] if LibreOffice is not available.
+    Strategy: PPTX → PDF (LibreOffice, all slides) → PNG per page (pdftoppm).
+    Returns a list of PNG bytes in slide order, or [] on failure.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         pptx_path = os.path.join(tmpdir, "input.pptx")
         with open(pptx_path, "wb") as f:
             f.write(file_bytes)
 
+        # Step 1: PPTX → PDF (LibreOffice reliably exports all slides to PDF)
         try:
             subprocess.run(
-                [
-                    "libreoffice", "--headless",
-                    "--convert-to", "png",
-                    "--outdir", tmpdir,
-                    pptx_path,
-                ],
-                check=True,
-                capture_output=True,
-                timeout=120,
+                ["libreoffice", "--headless", "--convert-to", "pdf",
+                 "--outdir", tmpdir, pptx_path],
+                check=True, capture_output=True, timeout=180,
             )
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             return []
 
-        # LibreOffice names output files: input.png (1 slide) or input1.png input2.png ...
+        pdf_path = os.path.join(tmpdir, "input.pdf")
+        if not os.path.exists(pdf_path):
+            return []
+
+        # Step 2: PDF pages → PNG (pdftoppm from poppler-utils)
+        slide_prefix = os.path.join(tmpdir, "slide")
+        try:
+            subprocess.run(
+                ["pdftoppm", "-png", "-r", "150", pdf_path, slide_prefix],
+                check=True, capture_output=True, timeout=180,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            return []
+
+        # pdftoppm outputs: slide-1.png, slide-2.png, ... (or zero-padded)
+        def _page_num(name: str) -> int:
+            m = re.search(r"(\d+)\.png$", name)
+            return int(m.group(1)) if m else 0
+
         pngs = sorted(
-            [f for f in os.listdir(tmpdir) if f.endswith(".png")],
-            key=lambda n: (len(n), n),  # lexicographic stable sort by length then name
+            [f for f in os.listdir(tmpdir) if f.startswith("slide") and f.endswith(".png")],
+            key=_page_num,
         )
         result = []
         for name in pngs:

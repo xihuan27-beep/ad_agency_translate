@@ -652,6 +652,19 @@ elif st.session_state.stage == "classify":
             st.markdown('<div style="font-size:13px;color:#667085;">이 슬라이드에 번역할 텍스트가 없습니다.</div>',
                         unsafe_allow_html=True)
         else:
+            # Bulk toggle row
+            cb_all_p, cb_all_c = st.columns(2)
+            with cb_all_p:
+                if st.button("전체 발표용", key=f"all_pres_{active_slide}", use_container_width=True):
+                    for i, u in slide_items:
+                        st.session_state.classified_units[i]["category"] = "presentation"
+                    st.rerun()
+            with cb_all_c:
+                if st.button("전체 카피", key=f"all_copy_{active_slide}", type="primary", use_container_width=True):
+                    for i, u in slide_items:
+                        st.session_state.classified_units[i]["category"] = "copy"
+                    st.rerun()
+
             for i, u in slide_items:
                 cat = u["category"]
                 short = u["ko_text"][:45] + ("…" if len(u["ko_text"]) > 45 else "")
