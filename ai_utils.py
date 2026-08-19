@@ -5,6 +5,8 @@ import sys
 import anthropic
 
 MODEL = "claude-haiku-4-5"
+TRANSLATE_BATCH = 20   # units per API call for presentation translation
+COPY_BATCH = 10        # copy options need more tokens per item
 
 
 def _client() -> anthropic.Anthropic:
@@ -147,15 +149,21 @@ Write "notes" and "clarification" fields in Korean:
         )
         return _extract_json(resp.content[0].text)
 
-    first = _call(presentation_units)
-    result = _retry_missing(_call, presentation_units, first)
+    # Process in batches to stay within max_tokens
+    all_items: list[dict] = []
+    for i in range(0, len(presentation_units), TRANSLATE_BATCH):
+        batch = presentation_units[i : i + TRANSLATE_BATCH]
+        first = _call(batch)
+        batch_result = _retry_missing(_call, batch, first)
+        all_items.extend(batch_result)
+
     return {
         item["id"]: {
             "en_text": item.get("en_text", ""),
             "notes": item.get("notes", ""),
             "clarification": item.get("clarification", ""),
         }
-        for item in result
+        for item in all_items
     }
 
 
@@ -233,8 +241,14 @@ Respond with ONLY a JSON array. Write notes/recommendation/cultural_flag/clarifi
         )
         return _extract_json(resp.content[0].text)
 
-    first = _call(copy_units)
-    result = _retry_missing(_call, copy_units, first)
+    # Process in smaller batches — copy options are verbose, hit token limits faster
+    all_items: list[dict] = []
+    for i in range(0, len(copy_units), COPY_BATCH):
+        batch = copy_units[i : i + COPY_BATCH]
+        first = _call(batch)
+        batch_result = _retry_missing(_call, batch, first)
+        all_items.extend(batch_result)
+
     return {
         item["id"]: {
             "options": item.get("options", ["", "", ""]),
@@ -243,7 +257,7 @@ Respond with ONLY a JSON array. Write notes/recommendation/cultural_flag/clarifi
             "cultural_flag": item.get("cultural_flag", ""),
             "clarification": item.get("clarification", ""),
         }
-        for item in result
+        for item in all_items
     }
 
 
