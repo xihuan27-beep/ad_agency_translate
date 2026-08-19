@@ -539,9 +539,9 @@ elif st.session_state.stage == "classify":
 
     units = st.session_state.classified_units
 
-    # Compute unique slides
-    slide_idxs = sorted({u["slide_idx"] for u in units})
-    n_slides = (max(u["slide_idx"] for u in units) + 1) if units else 0
+    # Compute slide count — use rendered images if available so ALL slides show
+    slide_imgs = st.session_state.get("slide_images") or []
+    n_slides = len(slide_imgs) if slide_imgs else ((max(u["slide_idx"] for u in units) + 1) if units else 0)
     active_slide = st.session_state.active_classify_slide
     if active_slide >= n_slides:
         active_slide = 0
@@ -605,19 +605,22 @@ elif st.session_state.stage == "classify":
         else:
             for i, u in slide_items:
                 cat = u["category"]
-                tag_html = '<span class="tag-p">발표용</span>' if cat == "presentation" else '<span class="tag-c">카피</span>'
-                st.markdown(
-                    f'<div class="cl-item">'
-                    f'<div class="cl-item-text">{_html.escape(u["ko_text"][:60])}{"…" if len(u["ko_text"])>60 else ""}</div>'
-                    f'{tag_html}</div>',
-                    unsafe_allow_html=True,
-                )
-                btn_label = "→ 발표용으로" if cat == "copy" else "→ 카피로"
-                if st.button(btn_label, key=f"tog_{u['id']}", use_container_width=True):
-                    st.session_state.classified_units[i]["category"] = (
-                        "presentation" if cat == "copy" else "copy"
+                short = u["ko_text"][:45] + ("…" if len(u["ko_text"]) > 45 else "")
+                c_tag, c_text = st.columns([1, 3])
+                with c_tag:
+                    tag_label = "발표용" if cat == "presentation" else "카피"
+                    tag_type = "secondary" if cat == "presentation" else "primary"
+                    if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
+                        st.session_state.classified_units[i]["category"] = (
+                            "presentation" if cat == "copy" else "copy"
+                        )
+                        rerun_needed = True
+                with c_text:
+                    st.markdown(
+                        f"<p style='font-size:12.5px;color:#101828;margin:0;"
+                        f"padding:5px 0;line-height:1.4;'>{_html.escape(short)}</p>",
+                        unsafe_allow_html=True,
                     )
-                    rerun_needed = True
 
         st.markdown('</div>', unsafe_allow_html=True)
 
