@@ -260,6 +260,7 @@ def _init():
         "chat_history_2b": [],
         "output_bytes": None,
         "slide_images": [],
+        "slide_count": 0,
         "active_classify_slide": 0,
     }
     for k, v in defaults.items():
@@ -556,6 +557,8 @@ if st.session_state.stage == "upload":
 
         st.session_state.file_bytes = file_bytes
         st.session_state.file_name = f"gdrive_{fid[:8]}_EN.pptx"
+        from pptx import Presentation as _Prs
+        st.session_state.slide_count = len(_Prs(io.BytesIO(file_bytes)).slides)
         st.session_state.text_units = text_units
         st.session_state.slide_images = slide_imgs
         st.session_state.classification_done = False
@@ -582,9 +585,12 @@ elif st.session_state.stage == "classify":
 
     units = st.session_state.classified_units
 
-    # Compute slide count — use rendered images if available so ALL slides show
+    # Compute slide count — prefer the authoritative PPTX slide count
     slide_imgs = st.session_state.get("slide_images") or []
-    n_slides = len(slide_imgs) if slide_imgs else ((max(u["slide_idx"] for u in units) + 1) if units else 0)
+    n_from_pptx = st.session_state.get("slide_count") or 0
+    n_from_imgs = len(slide_imgs)
+    n_from_units = (max(u["slide_idx"] for u in units) + 1) if units else 0
+    n_slides = max(n_from_pptx, n_from_imgs, n_from_units)
     active_slide = st.session_state.active_classify_slide
     if active_slide >= n_slides:
         active_slide = 0
