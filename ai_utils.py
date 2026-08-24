@@ -338,3 +338,51 @@ Reply with ONLY the refined English text — no quotes, no explanation, no pream
         messages=[{"role": "user", "content": prompt}],
     )
     return resp.content[0].text.strip().strip('"')
+
+
+def translate_en_to_ko(text_units: list[dict], glossary: str) -> dict[str, str]:
+    """Batch-translate English text units to Korean.
+
+    Returns id -> ko_text.
+    The source text is in unit["ko_text"] (direction-agnostic field name).
+    """
+    client = _client()
+
+    def _call(units: list[dict]) -> list[dict]:
+        input_list = [{"id": u["id"], "en_text": u["ko_text"]} for u in units]
+
+        prompt = f"""You are a professional Korean translator working at an advertising agency.
+
+[Context]
+Translating an English advertising client brief or proposal into Korean for the Korean agency team.
+Readers: Korean advertising professionals who need to understand the client's intent quickly.
+
+[Goals]
+- Natural, professional Korean using standard advertising industry terms
+- Preserve brand names, product names, and proper nouns exactly as written
+- Preserve numbers, dates, and percentages exactly
+- Short bullet-point text stays short — do not expand unnecessarily
+{_glossary_line(glossary)}
+
+[Input]
+{json.dumps(input_list, ensure_ascii=False, indent=2)}
+
+[Output Format]
+Respond with ONLY a JSON array:
+[{{"id": "...", "ko_text": "..."}}]"""
+
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return _extract_json(resp.content[0].text)
+
+    all_items: list[dict] = []
+    for i in range(0, len(text_units), TRANSLATE_BATCH):
+        batch = text_units[i : i + TRANSLATE_BATCH]
+        first = _call(batch)
+        batch_result = _retry_missing(_call, batch, first)
+        all_items.extend(batch_result)
+
+    return {item["id"]: item.get("ko_text", "") for item in all_items}

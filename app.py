@@ -8,12 +8,14 @@ import base64
 from collections import defaultdict
 
 from pptx_utils import extract_text_units, apply_translations, extract_reference_texts, render_slides_to_images
+from docx_utils import extract_text_from_docx, apply_translations_to_docx
 from ai_utils import (
     classify_text_units,
     translate_presentation_texts,
     generate_copy_options,
     chat_modify_presentation,
     chat_refine_copy,
+    translate_en_to_ko,
 )
 
 st.set_page_config(
@@ -271,6 +273,10 @@ def _init():
         "slide_images": [],
         "slide_count": 0,
         "active_classify_slide": 0,
+        "direction": "ko_en",
+        "file_type": "pptx",
+        "en_ko_translations": {},
+        "en_ko_loaded": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -285,6 +291,8 @@ def _gdrive_file_id(url: str) -> str | None:
         r"/file/d/([a-zA-Z0-9_-]+)",
         r"[?&]id=([a-zA-Z0-9_-]+)",
         r"/presentation/d/([a-zA-Z0-9_-]+)",
+        r"/document/d/([a-zA-Z0-9_-]+)",
+        r"/spreadsheets/d/([a-zA-Z0-9_-]+)",
     ]
     for p in patterns:
         m = re.search(p, url)
@@ -295,7 +303,10 @@ def _gdrive_file_id(url: str) -> str | None:
 def _gdrive_is_slides(url: str) -> bool:
     return bool(re.search(r"/presentation/d/", url))
 
-def _download_gdrive(file_id: str, is_slides: bool = False) -> bytes:
+def _gdrive_is_docs(url: str) -> bool:
+    return bool(re.search(r"/document/d/", url))
+
+def _download_gdrive(file_id: str, is_slides: bool = False, is_docs: bool = False) -> bytes:
     session = requests.Session()
     errors = []
     if is_slides:
@@ -307,6 +318,15 @@ def _download_gdrive(file_id: str, is_slides: bool = False) -> bytes:
             errors.append(f"Slides export: HTTP {resp.status_code}")
         except Exception as e:
             errors.append(f"Slides export: {e}")
+    if is_docs:
+        url = f"https://docs.google.com/document/d/{file_id}/export?format=docx"
+        try:
+            resp = session.get(url, timeout=300)
+            if resp.status_code == 200 and len(resp.content) > 500:
+                return resp.content
+            errors.append(f"Docs export: HTTP {resp.status_code}")
+        except Exception as e:
+            errors.append(f"Docs export: {e}")
     url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&authuser=0&confirm=t"
     try:
         resp = session.get(url, stream=True, timeout=300)
@@ -381,11 +401,20 @@ def _thumb_html(slide_idx: int, active: bool) -> str:
 
 
 # ── Chrome: top bar + step rail ───────────────────────────────────────────────
-STAGES = ["upload", "classify", "review_2a", "review_2b", "download"]
-STAGE_LABELS = ["업로드", "분류", "발표용 감수", "카피 선택", "다운로드"]
+STAGES_KO_EN = ["upload", "classify", "review_2a", "review_2b", "download"]
+LABELS_KO_EN = ["업로드", "분류", "발표용 감수", "카피 선택", "다운로드"]
+STAGES_EN_KO = ["upload", "en_ko", "download"]
+LABELS_EN_KO = ["업로드", "번역", "다운로드"]
+
+def _current_stages() -> tuple[list, list]:
+    if st.session_state.direction == "en_ko":
+        return STAGES_EN_KO, LABELS_EN_KO
+    return STAGES_KO_EN, LABELS_KO_EN
 
 def _render_chrome():
-    curr_idx = STAGES.index(st.session_state.stage)
+    stages, labels = _current_stages()
+    curr_stage = st.session_state.stage
+    curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
     st.markdown(
         '<div class="topbar">'
         '<div class="topbar-logo">'
@@ -393,12 +422,12 @@ def _render_chrome():
         '<rect x="2" y="3" width="20" height="15" rx="2" stroke="white" stroke-width="2" fill="none"/>'
         '<path d="M8 22h8M12 18v4" stroke="white" stroke-width="2" stroke-linecap="round"/>'
         '</svg></div>'
-        '<span class="topbar-title">광고주 제안 문서 영문 번역 시스템</span>'
+        '<span class="topbar-title">광고주 제안 문서 번역 시스템</span>'
         '</div>',
         unsafe_allow_html=True,
     )
     items = ""
-    for i, label in enumerate(STAGE_LABELS):
+    for i, label in enumerate(labels):
         if i < curr_idx:
             cls = "step done"
         elif i == curr_idx:
@@ -414,22 +443,48 @@ _render_chrome()
 # ── Stage: upload ─────────────────────────────────────────────────────────────
 if st.session_state.stage == "upload":
     st.markdown('<div class="page">', unsafe_allow_html=True)
-    st.markdown('<div class="page-title">PPT 파일 업로드 및 캠페인 브리프</div>', unsafe_allow_html=True)
-    st.markdown('<div class="page-sub">번역할 한국어 PPTX 파일과 캠페인 정보를 입력하세요.</div>', unsafe_allow_html=True)
 
-    # Card 1: PPTX file
-    st.markdown('<div class="card"><div class="card-title">한국어 PPTX 파일</div>', unsafe_allow_html=True)
-    st.markdown('<div class="field-label">☁ Google Drive 링크</div>', unsafe_allow_html=True)
+    # Direction selector
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">번역 방향</div>', unsafe_allow_html=True)
+    _dir_choice = st.radio(
+        "direction",
+        options=["한국어 → 영어  (제안서·PPT 영문화)", "영어 → 한국어  (광고주 영문 자료 이해용)"],
+        index=0 if st.session_state.direction == "ko_en" else 1,
+        label_visibility="collapsed",
+        horizontal=True,
+        key="dir_radio",
+    )
+    _dir = "ko_en" if "한국어" in _dir_choice.split("→")[0] else "en_ko"
+    if _dir != st.session_state.direction:
+        st.session_state.direction = _dir
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    _is_en_ko = st.session_state.direction == "en_ko"
+
+    if _is_en_ko:
+        st.markdown('<div class="page-title">영어 문서 업로드</div>', unsafe_allow_html=True)
+        st.markdown('<div class="page-sub">번역할 영어 PPTX 또는 Word(.docx) 파일의 Google Drive 링크를 입력하세요.</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="page-title">PPT 파일 업로드 및 캠페인 브리프</div>', unsafe_allow_html=True)
+        st.markdown('<div class="page-sub">번역할 한국어 PPTX 파일과 캠페인 정보를 입력하세요.</div>', unsafe_allow_html=True)
+
+    # Card 1: file
+    _file_card_title = "영어 파일 (PPTX / Word)" if _is_en_ko else "한국어 PPTX 파일"
+    _file_placeholder = "https://drive.google.com/file/d/...  또는  https://docs.google.com/document/d/..."
+    st.markdown(f'<div class="card"><div class="card-title">{_file_card_title}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="field-label">☁ Google Drive / Google Docs 링크</div>', unsafe_allow_html=True)
     c1, c2 = st.columns([5, 1])
     with c1:
         drive_url = st.text_input(
-            "drive_url", placeholder="https://drive.google.com/file/d/...",
+            "drive_url", placeholder=_file_placeholder,
             label_visibility="collapsed", key="up_drive_url",
         )
     with c2:
         fetch_clicked = st.button("가져오기", key="btn_fetch_main", use_container_width=True, type="primary")
     if drive_url.strip() and not _gdrive_file_id(drive_url.strip()):
-        st.warning("올바른 Google Drive 링크가 아닙니다.")
+        st.warning("올바른 Google Drive / Google Docs 링크가 아닙니다.")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Card 2: Brand name
@@ -445,56 +500,72 @@ if st.session_state.stage == "upload":
             value=st.session_state.brand_name_en, label_visibility="collapsed")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Card 3: Term mapping
+    # Card 3: Term mapping (direction-aware labels)
+    if _is_en_ko:
+        _kp_title = "주요 용어 매핑 (영어 → 한국어)"
+        _kp_sub = "자주 쓰이는 영어 표현의 선호 한국어 번역을 지정합니다."
+        _kp_col1, _kp_col2 = "영어", "한국어"
+        _kp_label1, _kp_label2 = "영어 표현", "한국어 번역 (선호)"
+        _kp_init = st.session_state.key_phrases if st.session_state.key_phrases else [{"영어": "", "한국어": ""}]
+    else:
+        _kp_title = "주요 용어 매핑 (한국어 → 영어)"
+        _kp_sub = "자주 쓰는 표현의 선호 번역을 지정합니다. 행 추가 버튼으로 한 줄을 추가하세요."
+        _kp_col1, _kp_col2 = "한국어", "영어"
+        _kp_label1, _kp_label2 = "한국어 표현", "영어 번역 (선호)"
+        _kp_init = st.session_state.key_phrases if st.session_state.key_phrases else [{"한국어": "", "영어": ""}]
     st.markdown(
-        '<div class="card"><div class="card-title">주요 용어 매핑 (한국어 → 영어)</div>'
-        '<div class="card-sub">자주 쓰는 표현의 선호 번역을 지정합니다. 행 추가 버튼으로 한 줄을 추가하세요.</div>',
+        f'<div class="card"><div class="card-title">{_kp_title}</div>'
+        f'<div class="card-sub">{_kp_sub}</div>',
         unsafe_allow_html=True,
     )
-    init_kp = st.session_state.key_phrases if st.session_state.key_phrases else [{"한국어": "", "영어": ""}]
     edited_kp = st.data_editor(
-        pd.DataFrame(init_kp),
+        pd.DataFrame(_kp_init),
         column_config={
-            "한국어": st.column_config.TextColumn("한국어 표현", width="large"),
-            "영어": st.column_config.TextColumn("영어 번역 (선호)", width="large"),
+            _kp_col1: st.column_config.TextColumn(_kp_label1, width="large"),
+            _kp_col2: st.column_config.TextColumn(_kp_label2, width="large"),
         },
         num_rows="dynamic", hide_index=True, use_container_width=True, key="kp_editor",
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Card 4: Reference PPTX (optional)
-    st.markdown(
-        '<div class="card"><div class="card-title">이전 번역본 참고 (선택)</div>'
-        '<div class="card-sub">기존 영문 PPT를 올리면 용어·문체를 참고해 일관성을 유지합니다.</div>'
-        '<div class="field-label">영문 참고 PPTX 링크 (선택)</div>',
-        unsafe_allow_html=True,
-    )
-    c3, c4 = st.columns([5, 1])
-    with c3:
-        ref_drive_url = st.text_input(
-            "ref_url", placeholder="https://drive.google.com/file/d/...",
-            label_visibility="collapsed", key="up_ref_url",
+    # Cards only shown for ko→en
+    ref_drive_url = ""
+    font_file = None
+    if not _is_en_ko:
+        # Card 4: Reference PPTX (optional)
+        st.markdown(
+            '<div class="card"><div class="card-title">이전 번역본 참고 (선택)</div>'
+            '<div class="card-sub">기존 영문 PPT를 올리면 용어·문체를 참고해 일관성을 유지합니다.</div>'
+            '<div class="field-label">영문 참고 PPTX 링크 (선택)</div>',
+            unsafe_allow_html=True,
         )
-    with c4:
-        st.button("가져오기", key="btn_fetch_ref", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        c3, c4 = st.columns([5, 1])
+        with c3:
+            ref_drive_url = st.text_input(
+                "ref_url", placeholder="https://drive.google.com/file/d/...",
+                label_visibility="collapsed", key="up_ref_url",
+            )
+        with c4:
+            st.button("가져오기", key="btn_fetch_ref", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Card 5: Font (optional)
-    st.markdown(
-        '<div class="card"><div class="card-title">영어 폰트 (선택) ✏️</div>'
-        '<div class="card-sub">번역된 텍스트에 적용할 TTF/OTF 폰트 파일을 업로드하세요. (해당 폰트가 PPT를 열 PC에 설치되어 있어야 합니다)</div>',
-        unsafe_allow_html=True,
-    )
-    font_file = st.file_uploader("폰트 파일 (선택, TTF/OTF)", type=["ttf", "otf"], key="font_uploader",
-                                  label_visibility="collapsed")
-    if font_file:
-        st.caption(f"업로드: {font_file.name}")
-    st.markdown('</div>', unsafe_allow_html=True)
+        # Card 5: Font (optional)
+        st.markdown(
+            '<div class="card"><div class="card-title">영어 폰트 (선택) ✏️</div>'
+            '<div class="card-sub">번역된 텍스트에 적용할 TTF/OTF 폰트 파일을 업로드하세요.</div>',
+            unsafe_allow_html=True,
+        )
+        font_file = st.file_uploader("폰트 파일 (선택, TTF/OTF)", type=["ttf", "otf"], key="font_uploader",
+                                      label_visibility="collapsed")
+        if font_file:
+            st.caption(f"업로드: {font_file.name}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # Card 6: Proper nouns
+    _noun_sub = "번역하지 않고 그대로 쓸 브랜드명, 인명, 제품명 등을 쉼표로 구분해 입력하세요."
     st.markdown(
-        '<div class="card"><div class="card-title">고유명사 / 번역하지 않을 단어</div>'
-        '<div class="card-sub">영어로도 그대로 쓸 브랜드명, 인명, 제품명 등을 쉼표로 구분해 입력하세요.</div>',
+        f'<div class="card"><div class="card-title">고유명사 / 번역하지 않을 단어</div>'
+        f'<div class="card-sub">{_noun_sub}</div>',
         unsafe_allow_html=True,
     )
     glossary = st.text_input(
@@ -505,33 +576,50 @@ if st.session_state.stage == "upload":
 
     # Footer nav
     file_ready = bool(drive_url.strip() and _gdrive_file_id(drive_url.strip()))
+    _next_label = "다음 단계: 번역 →" if _is_en_ko else "다음 단계: 분류 →"
     _, col_next = st.columns([1, 1])
     with col_next:
-        go = st.button("다음 단계: 분류 →", type="primary", disabled=not file_ready,
+        go = st.button(_next_label, type="primary", disabled=not file_ready,
                        use_container_width=True, key="btn_go")
 
     if go and file_ready:
-        fid = _gdrive_file_id(drive_url.strip())
+        _url = drive_url.strip()
+        fid = _gdrive_file_id(_url)
+        _is_slides = _gdrive_is_slides(_url)
+        _is_docs = _gdrive_is_docs(_url)
         with st.spinner("Google Drive에서 파일 다운로드 중..."):
             try:
-                file_bytes = _download_gdrive(fid, is_slides=_gdrive_is_slides(drive_url.strip()))
+                file_bytes = _download_gdrive(fid, is_slides=_is_slides, is_docs=_is_docs)
             except Exception as e:
                 st.error(f"다운로드 실패: {e}")
                 st.stop()
 
+        # Detect file type from URL or content header
+        _file_type = "docx" if (_is_docs or _url.lower().endswith(".docx")) else "pptx"
+
         with st.spinner("텍스트 파싱 중..."):
-            text_units = extract_text_units(file_bytes)
+            if _file_type == "docx":
+                text_units = extract_text_from_docx(file_bytes)
+            else:
+                text_units = extract_text_units(file_bytes)
         if not text_units:
             st.error("번역 가능한 텍스트를 찾지 못했습니다. 파일을 확인해 주세요.")
             st.stop()
 
-        with st.spinner("슬라이드 이미지 렌더링 중... (LibreOffice 필요)"):
-            slide_imgs = render_slides_to_images(file_bytes)
+        # Slide images only for PPTX
+        slide_imgs = []
+        slide_count = 0
+        if _file_type == "pptx":
+            with st.spinner("슬라이드 이미지 렌더링 중... (LibreOffice 필요)"):
+                slide_imgs = render_slides_to_images(file_bytes)
+            from pptx import Presentation as _Prs
+            slide_count = len(_Prs(io.BytesIO(file_bytes)).slides)
 
         st.session_state.brand_name_ko = brand_ko
         st.session_state.brand_name_en = brand_en
         st.session_state.key_phrases = edited_kp.to_dict("records")
         st.session_state.glossary = glossary
+        st.session_state.file_type = _file_type
 
         if ref_drive_url.strip():
             rfid = _gdrive_file_id(ref_drive_url.strip())
@@ -565,14 +653,22 @@ if st.session_state.stage == "upload":
             st.session_state.font_name = ""
 
         st.session_state.file_bytes = file_bytes
-        st.session_state.file_name = f"gdrive_{fid[:8]}_EN.pptx"
-        from pptx import Presentation as _Prs
-        st.session_state.slide_count = len(_Prs(io.BytesIO(file_bytes)).slides)
+        _suffix = "KO" if _is_en_ko else "EN"
+        _ext = _file_type
+        st.session_state.file_name = f"gdrive_{fid[:8]}_{_suffix}.{_ext}"
+        st.session_state.slide_count = slide_count
         st.session_state.text_units = text_units
         st.session_state.slide_images = slide_imgs
-        st.session_state.classification_done = False
-        st.session_state.active_classify_slide = 0
-        st.session_state.stage = "classify"
+        st.session_state.output_bytes = None
+
+        if _is_en_ko:
+            st.session_state.en_ko_loaded = False
+            st.session_state.en_ko_translations = {}
+            st.session_state.stage = "en_ko"
+        else:
+            st.session_state.classification_done = False
+            st.session_state.active_classify_slide = 0
+            st.session_state.stage = "classify"
         st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1116,43 +1212,146 @@ elif st.session_state.stage == "review_2b":
             st.rerun()
 
 
+# ── Stage: en_ko (영→한 번역) ─────────────────────────────────────────────────
+elif st.session_state.stage == "en_ko":
+
+    text_units = st.session_state.text_units
+
+    if not st.session_state.en_ko_loaded:
+        n = len(text_units)
+        with st.spinner(f"AI가 영어 텍스트를 한국어로 번역하는 중... ({n}개 항목)"):
+            try:
+                ko_trans = translate_en_to_ko(text_units, _build_context())
+                st.session_state.en_ko_translations = ko_trans
+                st.session_state.en_ko_loaded = True
+            except Exception as e:
+                st.error(f"번역 오류: {e}")
+                if st.button("다시 시도", key="retry_en_ko", type="primary"):
+                    st.rerun()
+                st.stop()
+        st.rerun()
+
+    ko_trans = st.session_state.en_ko_translations
+    n_total = len(text_units)
+    n_done = sum(1 for v in ko_trans.values() if v.strip())
+
+    st.markdown('<div class="page">', unsafe_allow_html=True)
+    st.markdown('<div class="page-title">번역 검토</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="page-sub">총 {n_total}개 텍스트 중 {n_done}개 번역 완료</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Preview table: English original → Korean translation
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    rows = []
+    for u in text_units:
+        en = u["ko_text"]  # source stored in ko_text field
+        ko = ko_trans.get(u["id"], "")
+        if en.strip():
+            rows.append({"영어 원문": en, "한국어 번역": ko})
+    if rows:
+        import pandas as _pd
+        st.dataframe(
+            _pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True,
+            height=min(400, 40 + 35 * len(rows)),
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    c_back, c_next = st.columns([1, 2])
+    with c_back:
+        if st.button("← 업로드로 돌아가기", key="en_ko_back", use_container_width=True):
+            st.session_state.stage = "upload"
+            st.rerun()
+    with c_next:
+        if st.button("한국어 파일 생성 및 다운로드 →", key="en_ko_next", type="primary", use_container_width=True):
+            st.session_state.output_bytes = None
+            st.session_state.stage = "download"
+            st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 # ── Stage: download ───────────────────────────────────────────────────────────
 elif st.session_state.stage == "download":
 
+    _is_en_ko = st.session_state.direction == "en_ko"
+    _file_type = st.session_state.file_type
+
     if st.session_state.output_bytes is None:
-        with st.spinner("번역본을 PPTX에 적용하는 중..."):
-            pres_trans = {
-                uid: v.get("en_text", "")
-                for uid, v in st.session_state.presentation_translations.items()
-            }
-            all_translations = {**pres_trans, **st.session_state.copy_selections}
-            try:
-                out = apply_translations(
-                    st.session_state.file_bytes,
-                    all_translations,
-                    font_name=st.session_state.font_name,
-                )
-                st.session_state.output_bytes = out
-            except Exception as e:
-                st.error(f"파일 생성 오류: {e}")
-                st.stop()
+        if _is_en_ko:
+            _spinner_msg = f"번역을 {'PPTX' if _file_type == 'pptx' else 'Word 문서'}에 적용하는 중..."
+            with st.spinner(_spinner_msg):
+                try:
+                    if _file_type == "docx":
+                        out = apply_translations_to_docx(
+                            st.session_state.file_bytes,
+                            st.session_state.en_ko_translations,
+                        )
+                    else:
+                        out = apply_translations(
+                            st.session_state.file_bytes,
+                            st.session_state.en_ko_translations,
+                            font_name="",
+                        )
+                    st.session_state.output_bytes = out
+                except Exception as e:
+                    st.error(f"파일 생성 오류: {e}")
+                    st.stop()
+        else:
+            with st.spinner("번역본을 PPTX에 적용하는 중..."):
+                pres_trans = {
+                    uid: v.get("en_text", "")
+                    for uid, v in st.session_state.presentation_translations.items()
+                }
+                all_translations = {**pres_trans, **st.session_state.copy_selections}
+                try:
+                    out = apply_translations(
+                        st.session_state.file_bytes,
+                        all_translations,
+                        font_name=st.session_state.font_name,
+                    )
+                    st.session_state.output_bytes = out
+                except Exception as e:
+                    st.error(f"파일 생성 오류: {e}")
+                    st.stop()
         st.rerun()
 
     st.markdown('<div class="page">', unsafe_allow_html=True)
     st.markdown('<div class="page-title">번역 완료</div>', unsafe_allow_html=True)
-    n_pres = len(st.session_state.presentation_units)
-    n_copy = len(st.session_state.copy_units)
-    st.markdown(
-        f'<div class="page-sub">발표용 텍스트 {n_pres}개 번역 · 광고 카피 {n_copy}개 트랜스크리에이션 완료</div>',
-        unsafe_allow_html=True,
-    )
+
+    if _is_en_ko:
+        n_total = len(st.session_state.text_units)
+        n_done = sum(1 for v in st.session_state.en_ko_translations.values() if v.strip())
+        st.markdown(
+            f'<div class="page-sub">영어 원문 {n_total}개 항목 → 한국어 번역 {n_done}개 완료</div>',
+            unsafe_allow_html=True,
+        )
+        _mime = (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            if _file_type == "docx"
+            else "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+        _dl_label = f"한국어 {'Word' if _file_type == 'docx' else 'PPT'} 다운로드"
+    else:
+        n_pres = len(st.session_state.presentation_units)
+        n_copy = len(st.session_state.copy_units)
+        st.markdown(
+            f'<div class="page-sub">발표용 텍스트 {n_pres}개 번역 · 광고 카피 {n_copy}개 트랜스크리에이션 완료</div>',
+            unsafe_allow_html=True,
+        )
+        _mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        _dl_label = "영문 PPT 다운로드"
+
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.success("영문 번역본이 준비되었습니다!")
+    st.success("번역본이 준비되었습니다!")
     st.download_button(
-        label="영문 PPT 다운로드",
+        label=_dl_label,
         data=st.session_state.output_bytes,
         file_name=st.session_state.file_name,
-        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        mime=_mime,
         type="primary",
     )
     st.markdown('</div>', unsafe_allow_html=True)
