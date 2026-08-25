@@ -350,6 +350,38 @@ Reply with ONLY the refined English text — no quotes, no explanation, no pream
     return resp.content[0].text.strip().strip('"')
 
 
+def check_copy_grammar(ko_text: str, en_text: str, glossary: str) -> str:
+    """Check English TVC copy for grammar, naturalness, and ad effectiveness.
+
+    Returns Korean feedback string.
+    """
+    client = _client()
+
+    prompt = f"""You are a senior English copyeditor at an advertising agency, reviewing TVC copy translated from Korean for the US market.
+
+Korean original: "{ko_text}"
+English copy to review: "{en_text}"
+{_glossary_line(glossary)}
+
+Review the English copy for:
+1. Grammar and punctuation errors
+2. Awkward phrasing or unnatural word choices for US audiences
+3. Rhythm and punch — does it work as advertising copy?
+4. Whether it faithfully captures the Korean original's intent
+
+If the copy is excellent as-is, confirm it and briefly explain why.
+If there are issues, give specific actionable feedback and suggest a corrected version (put the suggestion in quotes).
+
+Reply in Korean, concisely (2–4 sentences max)."""
+
+    resp = client.messages.create(
+        model=MODEL,
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return resp.content[0].text.strip()
+
+
 def translate_en_to_ko(text_units: list[dict], glossary: str) -> dict[str, str]:
     """Batch-translate English text units to Korean.
 

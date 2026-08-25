@@ -15,6 +15,7 @@ from ai_utils import (
     generate_copy_options,
     chat_modify_presentation,
     chat_refine_copy,
+    check_copy_grammar,
     translate_en_to_ko,
 )
 
@@ -238,6 +239,13 @@ div.stButton > button[kind="primary"]:hover {
 .navrow { display:flex;align-items:center;justify-content:space-between;padding:14px 0;gap:10px; }
 [data-testid="stHorizontalBlock"] { align-items: flex-start !important; }
 .review-img-panel { padding: 16px 0 16px 20px; position: sticky; top: 70px; }
+
+/* Sticky slide image panel — works in classify center col and review left col */
+[data-testid="column"]:has(.bezel) {
+  position: sticky !important;
+  top: 106px !important;   /* topbar 58px + steprail 48px */
+  align-self: flex-start !important;
+}
 </style>""", unsafe_allow_html=True)
 
 
@@ -274,6 +282,8 @@ def _init():
         "file_type": "pptx",
         "en_ko_translations": {},
         "en_ko_loaded": False,
+        "copy_grammar_results": {},
+        "excluded_unit_ids": [],
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -801,24 +811,58 @@ elif st.session_state.stage == "classify":
                         st.session_state.classified_units[i]["category"] = "copy"
                     st.rerun()
 
-            for i, u in slide_items:
+            excluded_ids = set(st.session_state.excluded_unit_ids)
+            for pos, (i, u) in enumerate(slide_items):
                 cat = u["category"]
+                is_excluded = u["id"] in excluded_ids
                 short = u["ko_text"][:45] + ("…" if len(u["ko_text"]) > 45 else "")
-                c_tag, c_text = st.columns([1, 3])
+                has_next = pos + 1 < len(slide_items)
+
+                c_tag, c_text, c_merge, c_excl = st.columns([1, 3, 0.5, 0.5])
                 with c_tag:
-                    tag_label = "발표용" if cat == "presentation" else "카피"
-                    tag_type = "secondary" if cat == "presentation" else "primary"
-                    if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
-                        st.session_state.classified_units[i]["category"] = (
-                            "presentation" if cat == "copy" else "copy"
+                    if is_excluded:
+                        st.markdown(
+                            '<p style="font-size:11px;color:#9CA3AF;margin:0;padding:5px 0;">제외됨</p>',
+                            unsafe_allow_html=True,
                         )
-                        rerun_needed = True
+                    else:
+                        tag_label = "발표용" if cat == "presentation" else "카피"
+                        tag_type = "secondary" if cat == "presentation" else "primary"
+                        if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
+                            st.session_state.classified_units[i]["category"] = (
+                                "presentation" if cat == "copy" else "copy"
+                            )
+                            rerun_needed = True
                 with c_text:
+                    _tc = "#9CA3AF" if is_excluded else "#101828"
+                    _td = "line-through" if is_excluded else "none"
                     st.markdown(
-                        f"<p style='font-size:12.5px;color:#101828;margin:0;"
-                        f"padding:5px 0;line-height:1.4;'>{_html.escape(short)}</p>",
+                        f"<p style='font-size:12.5px;color:{_tc};margin:0;"
+                        f"padding:5px 0;line-height:1.4;text-decoration:{_td};'>"
+                        f"{_html.escape(short)}</p>",
                         unsafe_allow_html=True,
                     )
+                with c_merge:
+                    if has_next and not is_excluded:
+                        if st.button("↕", key=f"merge_{u['id']}", use_container_width=True,
+                                     help="다음 항목과 합치기"):
+                            j, _ = slide_items[pos + 1]
+                            cu = st.session_state.classified_units[i]
+                            cv = st.session_state.classified_units[j]
+                            merged = cu["ko_text"] + " " + cv["ko_text"]
+                            st.session_state.classified_units[i]["ko_text"] = merged
+                            st.session_state.classified_units[i]["shape_text"] = merged
+                            del st.session_state.classified_units[j]
+                            rerun_needed = True
+                with c_excl:
+                    if is_excluded:
+                        if st.button("복원", key=f"excl_{u['id']}", use_container_width=True):
+                            st.session_state.excluded_unit_ids.remove(u["id"])
+                            rerun_needed = True
+                    else:
+                        if st.button("✕", key=f"excl_{u['id']}", use_container_width=True):
+                            st.session_state.excluded_unit_ids.append(u["id"])
+                            rerun_needed = True
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -871,8 +915,11 @@ elif st.session_state.stage == "classify":
                 st.rerun()
         with c_next:
             if st.button("발표용 감수 →", key="cl_next", type="primary", use_container_width=True):
-                pres = [u for u in st.session_state.classified_units if u["category"] == "presentation"]
-                copy = [u for u in st.session_state.classified_units if u["category"] == "copy"]
+                _excl_ids = set(st.session_state.excluded_unit_ids)
+                pres = [u for u in st.session_state.classified_units
+                        if u["category"] == "presentation" and u["id"] not in _excl_ids]
+                copy = [u for u in st.session_state.classified_units
+                        if u["category"] == "copy" and u["id"] not in _excl_ids]
                 st.session_state.presentation_units = pres
                 st.session_state.copy_units = copy
                 st.session_state.translations_loaded = False
@@ -1199,14 +1246,68 @@ elif st.session_state.stage == "review_2b":
                 unsafe_allow_html=True,
             )
 
+        # Manual edit section
+        st.markdown(
+            '<div style="margin-top:12px;border-top:1px solid #E5E7EB;padding-top:12px;">'
+            '<div style="font-size:12.5px;color:#6B7280;font-weight:500;margin-bottom:6px;">직접 수정</div>',
+            unsafe_allow_html=True,
+        )
+        manual_val = st.text_area(
+            "직접 수정",
+            value=current_sel,
+            key=f"manual_copy_{unit['id']}",
+            height=70,
+            label_visibility="collapsed",
+        )
+        mc_use, mc_check = st.columns(2)
+        with mc_use:
+            if st.button("이 카피 사용", key=f"use_manual_{unit['id']}", use_container_width=True, type="primary"):
+                for _gu in group:
+                    st.session_state.copy_selections[_gu["id"]] = manual_val
+                st.rerun()
+        with mc_check:
+            if st.button("문법 체크", key=f"grammar_{unit['id']}", use_container_width=True):
+                with st.spinner("문법 체크 중..."):
+                    try:
+                        feedback = check_copy_grammar(unit["ko_text"], manual_val, _build_context())
+                        st.session_state.copy_grammar_results[unit["id"]] = feedback
+                    except Exception as e:
+                        st.session_state.copy_grammar_results[unit["id"]] = f"오류: {e}"
+                st.rerun()
+        grammar_feedback = st.session_state.copy_grammar_results.get(unit["id"], "")
+        if grammar_feedback:
+            st.markdown(
+                f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+                f'padding:10px 14px;font-size:13px;color:#166534;line-height:1.6;margin-top:8px;">'
+                f'✅ {_html.escape(grammar_feedback)}</div>',
+                unsafe_allow_html=True,
+            )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── AI chat ─────────────────────────────────────────────────────────────
-    user_msg = st.chat_input(f"AI에게 카피 수정 요청하기 ({idx+1}/{total})", key="chat_2b")
-    if user_msg:
+        # AI chat section
+        st.markdown(
+            '<div style="margin-top:10px;border-top:1px solid #E5E7EB;padding-top:10px;">'
+            '<div style="font-size:12.5px;color:#6B7280;font-weight:500;margin-bottom:6px;">AI 수정 요청</div>',
+            unsafe_allow_html=True,
+        )
+        _chat_col, _chat_btn = st.columns([5, 1])
+        with _chat_col:
+            user_msg = st.text_input(
+                "AI 수정 요청",
+                key=f"chat_2b_{idx}",
+                placeholder=f"수정 요청 내용을 입력하세요 ({idx+1}/{total})",
+                label_visibility="collapsed",
+            )
+        with _chat_btn:
+            _send = st.button("전송", key=f"send_2b_{idx}", use_container_width=True, type="primary")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if _send and user_msg.strip():
         with st.spinner("카피 수정 중..."):
             try:
-                refined = chat_refine_copy(unit["ko_text"], current_sel, user_msg, _build_context())
+                refined = chat_refine_copy(unit["ko_text"], current_sel, user_msg.strip(), _build_context())
                 for _gu in group:
                     st.session_state.copy_selections[_gu["id"]] = refined
             except Exception as e:
