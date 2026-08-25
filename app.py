@@ -759,16 +759,17 @@ elif st.session_state.stage == "classify":
     rerun_needed = False
     col_left, col_center, col_right = st.columns([1.4, 4, 2])
 
-    # Left: thumbnail strip
+    # Left: thumbnail strip — independently scrollable
     with col_left:
-        for s_idx in range(n_slides):
-            is_active = (s_idx == active_slide)
-            st.markdown(_thumb_html(s_idx, is_active), unsafe_allow_html=True)
-            if st.button(f"슬라이드 {s_idx+1}", key=f"thumb_btn_{s_idx}",
-                         use_container_width=True,
-                         type="primary" if is_active else "secondary"):
-                st.session_state.active_classify_slide = s_idx
-                st.rerun()
+        with st.container(height=650):
+            for s_idx in range(n_slides):
+                is_active = (s_idx == active_slide)
+                st.markdown(_thumb_html(s_idx, is_active), unsafe_allow_html=True)
+                if st.button(f"슬라이드 {s_idx+1}", key=f"thumb_btn_{s_idx}",
+                             use_container_width=True,
+                             type="primary" if is_active else "secondary"):
+                    st.session_state.active_classify_slide = s_idx
+                    st.rerun()
 
     # Center: slide preview in bezel
     with col_center:
@@ -776,135 +777,137 @@ elif st.session_state.stage == "classify":
         st.markdown(_slide_img_html(active_slide), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Right: legend + current slide text units + next button
+    # Right: legend + current slide text units (independently scrollable); nav buttons below
     with col_right:
-        st.markdown(
-            '<div class="card">'
-            '<div class="card-title" style="margin-bottom:14px;">분류 범례</div>'
-            '<div class="legend-row"><div class="dot-y"></div>발표용 — 구두 발표 멘트</div>'
-            '<div class="legend-row"><div class="dot-b"></div>카피 — 광고카피</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+        with st.container(height=650):
+            st.markdown(
+                '<div class="card">'
+                '<div class="card-title" style="margin-bottom:14px;">분류 범례</div>'
+                '<div class="legend-row"><div class="dot-y"></div>발표용 — 구두 발표 멘트</div>'
+                '<div class="legend-row"><div class="dot-b"></div>카피 — 광고카피</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
-        st.markdown(
-            '<div class="card"><div class="card-title" style="margin-bottom:10px;">'
-            f'슬라이드 {active_slide + 1}</div>',
-            unsafe_allow_html=True,
-        )
+            st.markdown(
+                '<div class="card"><div class="card-title" style="margin-bottom:10px;">'
+                f'슬라이드 {active_slide + 1}</div>',
+                unsafe_allow_html=True,
+            )
 
-        slide_items = slide_groups.get(active_slide, [])
-        if not slide_items:
-            st.markdown('<div style="font-size:13px;color:#667085;">이 슬라이드에 번역할 텍스트가 없습니다.</div>',
-                        unsafe_allow_html=True)
-        else:
-            # Bulk toggle row
-            cb_all_p, cb_all_c = st.columns(2)
-            with cb_all_p:
-                if st.button("전체 발표용", key=f"all_pres_{active_slide}", use_container_width=True):
-                    for i, u in slide_items:
-                        st.session_state.classified_units[i]["category"] = "presentation"
-                    st.rerun()
-            with cb_all_c:
-                if st.button("전체 카피", key=f"all_copy_{active_slide}", type="primary", use_container_width=True):
-                    for i, u in slide_items:
-                        st.session_state.classified_units[i]["category"] = "copy"
-                    st.rerun()
+            slide_items = slide_groups.get(active_slide, [])
+            if not slide_items:
+                st.markdown('<div style="font-size:13px;color:#667085;">이 슬라이드에 번역할 텍스트가 없습니다.</div>',
+                            unsafe_allow_html=True)
+            else:
+                # Bulk toggle row
+                cb_all_p, cb_all_c = st.columns(2)
+                with cb_all_p:
+                    if st.button("전체 발표용", key=f"all_pres_{active_slide}", use_container_width=True):
+                        for i, u in slide_items:
+                            st.session_state.classified_units[i]["category"] = "presentation"
+                        st.rerun()
+                with cb_all_c:
+                    if st.button("전체 카피", key=f"all_copy_{active_slide}", type="primary", use_container_width=True):
+                        for i, u in slide_items:
+                            st.session_state.classified_units[i]["category"] = "copy"
+                        st.rerun()
 
-            excluded_ids = set(st.session_state.excluded_unit_ids)
-            for pos, (i, u) in enumerate(slide_items):
-                cat = u["category"]
-                is_excluded = u["id"] in excluded_ids
-                short = u["ko_text"][:45] + ("…" if len(u["ko_text"]) > 45 else "")
-                has_next = pos + 1 < len(slide_items)
+                excluded_ids = set(st.session_state.excluded_unit_ids)
+                for pos, (i, u) in enumerate(slide_items):
+                    cat = u["category"]
+                    is_excluded = u["id"] in excluded_ids
+                    short = u["ko_text"][:45] + ("…" if len(u["ko_text"]) > 45 else "")
+                    has_next = pos + 1 < len(slide_items)
 
-                c_tag, c_text, c_merge, c_excl = st.columns([1, 3, 0.5, 0.5])
-                with c_tag:
-                    if is_excluded:
+                    c_tag, c_text, c_merge, c_excl = st.columns([1, 3, 0.5, 0.5])
+                    with c_tag:
+                        if is_excluded:
+                            st.markdown(
+                                '<p style="font-size:11px;color:#9CA3AF;margin:0;padding:5px 0;">제외됨</p>',
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            tag_label = "발표용" if cat == "presentation" else "카피"
+                            tag_type = "secondary" if cat == "presentation" else "primary"
+                            if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
+                                st.session_state.classified_units[i]["category"] = (
+                                    "presentation" if cat == "copy" else "copy"
+                                )
+                                rerun_needed = True
+                    with c_text:
+                        _tc = "#9CA3AF" if is_excluded else "#101828"
+                        _td = "line-through" if is_excluded else "none"
                         st.markdown(
-                            '<p style="font-size:11px;color:#9CA3AF;margin:0;padding:5px 0;">제외됨</p>',
+                            f"<p style='font-size:12.5px;color:{_tc};margin:0;"
+                            f"padding:5px 0;line-height:1.4;text-decoration:{_td};'>"
+                            f"{_html.escape(short)}</p>",
                             unsafe_allow_html=True,
                         )
-                    else:
-                        tag_label = "발표용" if cat == "presentation" else "카피"
-                        tag_type = "secondary" if cat == "presentation" else "primary"
-                        if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
-                            st.session_state.classified_units[i]["category"] = (
-                                "presentation" if cat == "copy" else "copy"
-                            )
-                            rerun_needed = True
-                with c_text:
-                    _tc = "#9CA3AF" if is_excluded else "#101828"
-                    _td = "line-through" if is_excluded else "none"
-                    st.markdown(
-                        f"<p style='font-size:12.5px;color:{_tc};margin:0;"
-                        f"padding:5px 0;line-height:1.4;text-decoration:{_td};'>"
-                        f"{_html.escape(short)}</p>",
-                        unsafe_allow_html=True,
-                    )
-                with c_merge:
-                    if has_next and not is_excluded:
-                        if st.button("↕", key=f"merge_{u['id']}", use_container_width=True,
-                                     help="다음 항목과 합치기"):
-                            j, _ = slide_items[pos + 1]
-                            cu = st.session_state.classified_units[i]
-                            cv = st.session_state.classified_units[j]
-                            merged = cu["ko_text"] + " " + cv["ko_text"]
-                            st.session_state.classified_units[i]["ko_text"] = merged
-                            st.session_state.classified_units[i]["shape_text"] = merged
-                            del st.session_state.classified_units[j]
-                            rerun_needed = True
-                with c_excl:
-                    if is_excluded:
-                        if st.button("복원", key=f"excl_{u['id']}", use_container_width=True):
-                            st.session_state.excluded_unit_ids.remove(u["id"])
-                            rerun_needed = True
-                    else:
-                        if st.button("✕", key=f"excl_{u['id']}", use_container_width=True):
-                            st.session_state.excluded_unit_ids.append(u["id"])
-                            rerun_needed = True
+                    with c_merge:
+                        if has_next and not is_excluded:
+                            if st.button("↕", key=f"merge_{u['id']}", use_container_width=True,
+                                         help="다음 항목과 합치기"):
+                                j, _ = slide_items[pos + 1]
+                                cu = st.session_state.classified_units[i]
+                                cv = st.session_state.classified_units[j]
+                                merged = cu["ko_text"] + " " + cv["ko_text"]
+                                st.session_state.classified_units[i]["ko_text"] = merged
+                                st.session_state.classified_units[i]["shape_text"] = merged
+                                del st.session_state.classified_units[j]
+                                rerun_needed = True
+                    with c_excl:
+                        if is_excluded:
+                            if st.button("복원", key=f"excl_{u['id']}", use_container_width=True):
+                                st.session_state.excluded_unit_ids.remove(u["id"])
+                                rerun_needed = True
+                        else:
+                            if st.button("✕", key=f"excl_{u['id']}", use_container_width=True):
+                                st.session_state.excluded_unit_ids.append(u["id"])
+                                rerun_needed = True
 
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # Manual text addition
-        st.markdown(
-            '<div class="card" style="margin-top:8px;">'
-            '<div class="card-title" style="margin-bottom:8px;">텍스트 직접 추가</div>',
-            unsafe_allow_html=True,
-        )
-        manual_text = st.text_input(
-            "한국어 텍스트",
-            key=f"manual_text_{active_slide}",
-            placeholder="인식되지 않은 텍스트를 입력하세요",
-            label_visibility="collapsed",
-        )
-        mc_cat, mc_add = st.columns([2, 1])
-        with mc_cat:
-            manual_cat = st.selectbox(
-                "분류",
-                ["발표용", "카피"],
-                key=f"manual_cat_{active_slide}",
+            # Manual text addition
+            st.markdown(
+                '<div class="card" style="margin-top:8px;">'
+                '<div class="card-title" style="margin-bottom:8px;">텍스트 직접 추가</div>',
+                unsafe_allow_html=True,
+            )
+            manual_text = st.text_input(
+                "한국어 텍스트",
+                key=f"manual_text_{active_slide}",
+                placeholder="인식되지 않은 텍스트를 입력하세요",
                 label_visibility="collapsed",
             )
-        with mc_add:
-            if st.button("추가", key=f"manual_add_{active_slide}", use_container_width=True, type="primary"):
-                if manual_text.strip():
-                    import time as _time
-                    new_id = f"manual_s{active_slide}_{int(_time.time()*1000)}"
-                    st.session_state.classified_units.append({
-                        "id": new_id,
-                        "slide_idx": active_slide,
-                        "shape_id": -1,
-                        "p_idx": 0,
-                        "ko_text": manual_text.strip(),
-                        "font_size": 14.0,
-                        "shape_text": manual_text.strip(),
-                        "shape_para_count": 1,
-                        "category": "presentation" if manual_cat == "발표용" else "copy",
-                    })
-                    rerun_needed = True
-        st.markdown('</div>', unsafe_allow_html=True)
+            mc_cat, mc_add = st.columns([2, 1])
+            with mc_cat:
+                manual_cat = st.selectbox(
+                    "분류",
+                    ["발표용", "카피"],
+                    key=f"manual_cat_{active_slide}",
+                    label_visibility="collapsed",
+                )
+            with mc_add:
+                if st.button("추가", key=f"manual_add_{active_slide}", use_container_width=True, type="primary"):
+                    if manual_text.strip():
+                        import time as _time
+                        new_id = f"manual_s{active_slide}_{int(_time.time()*1000)}"
+                        st.session_state.classified_units.append({
+                            "id": new_id,
+                            "slide_idx": active_slide,
+                            "shape_id": -1,
+                            "p_idx": 0,
+                            "ko_text": manual_text.strip(),
+                            "font_size": 14.0,
+                            "shape_text": manual_text.strip(),
+                            "shape_para_count": 1,
+                            "category": "presentation" if manual_cat == "발표용" else "copy",
+                        })
+                        rerun_needed = True
+            st.markdown('</div>', unsafe_allow_html=True)
 
+        # Nav buttons outside the scrollable container — always visible
         if rerun_needed:
             st.rerun()
 
