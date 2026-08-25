@@ -7,6 +7,7 @@ import anthropic
 MODEL = "claude-haiku-4-5"
 TRANSLATE_BATCH = 20   # units per API call for presentation translation
 COPY_BATCH = 10        # copy options need more tokens per item
+CLASSIFY_BATCH = 50    # classify is short per item, but still batch for safety
 
 
 def _client() -> anthropic.Anthropic:
@@ -57,9 +58,10 @@ def _retry_missing(fn_call, all_units: list[dict], first_result: list[dict]) -> 
 def classify_text_units(text_units: list[dict], glossary: str) -> list[dict]:
     """Add 'category': 'presentation' | 'copy' to each unit."""
     client = _client()
-    input_list = [{"id": u["id"], "ko_text": u["ko_text"]} for u in text_units]
 
-    prompt = f"""You are analyzing Korean presentation slide text.
+    def _call(units: list[dict]) -> list[dict]:
+        input_list = [{"id": u["id"], "ko_text": u["ko_text"]} for u in units]
+        prompt = f"""You are analyzing Korean presentation slide text.
 
 Classify each text unit as:
 - "presentation": titles, bullet points, data labels, informational text
@@ -72,13 +74,21 @@ Input:
 Respond with ONLY a JSON array:
 [{{"id": "...", "category": "presentation"}}]"""
 
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    result = _extract_json(resp.content[0].text)
-    cat_map = {item["id"]: item["category"] for item in result}
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return _extract_json(resp.content[0].text)
+
+    all_items: list[dict] = []
+    for i in range(0, len(text_units), CLASSIFY_BATCH):
+        batch = text_units[i : i + CLASSIFY_BATCH]
+        first = _call(batch)
+        batch_result = _retry_missing(_call, batch, first)
+        all_items.extend(batch_result)
+
+    cat_map = {item["id"]: item["category"] for item in all_items}
     return [{**u, "category": cat_map.get(u["id"], "presentation")} for u in text_units]
 
 

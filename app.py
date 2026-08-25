@@ -108,11 +108,22 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
 .step.done { color: var(--cm); }
 
 /* ── Card ── */
+/* HTML-only card (no interactive widgets inside) */
 .card {
   background: var(--cw); border-radius: var(--r);
   box-shadow: var(--cs); padding: 22px 24px; margin-bottom: 14px;
 }
-.card-title { font-size: 14px; font-weight: 600; color: var(--ct); margin-bottom: 3px; }
+/* st.container(border=True) → restyle as card (used when widgets live inside) */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: var(--cw) !important;
+  border: none !important;
+  border-radius: var(--r) !important;
+  box-shadow: var(--cs) !important;
+  padding: 18px 22px !important;
+  margin-bottom: 14px !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"] > div { background: transparent !important; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--ct); margin-bottom: 8px; }
 .card-sub   { font-size: 12.5px; color: var(--cm); margin-bottom: 14px; line-height: 1.55; }
 .field-label { font-size: 12px; color: var(--cm); font-weight: 500; margin-bottom: 5px; }
 
@@ -431,21 +442,20 @@ if st.session_state.stage == "upload":
     st.markdown('<div class="page">', unsafe_allow_html=True)
 
     # Direction selector
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="card-title">번역 방향</div>', unsafe_allow_html=True)
-    _dir_choice = st.radio(
-        "direction",
-        options=["한국어 → 영어  (제안서·PPT 영문화)", "영어 → 한국어  (광고주 영문 자료 이해용)"],
-        index=0 if st.session_state.direction == "ko_en" else 1,
-        label_visibility="collapsed",
-        horizontal=True,
-        key="dir_radio",
-    )
+    with st.container(border=True):
+        st.markdown('<div class="card-title">번역 방향</div>', unsafe_allow_html=True)
+        _dir_choice = st.radio(
+            "direction",
+            options=["한국어 → 영어  (제안서·PPT 영문화)", "영어 → 한국어  (광고주 영문 자료 이해용)"],
+            index=0 if st.session_state.direction == "ko_en" else 1,
+            label_visibility="collapsed",
+            horizontal=True,
+            key="dir_radio",
+        )
     _dir = "ko_en" if "한국어" in _dir_choice.split("→")[0] else "en_ko"
     if _dir != st.session_state.direction:
         st.session_state.direction = _dir
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
     _is_en_ko = st.session_state.direction == "en_ko"
 
@@ -459,32 +469,32 @@ if st.session_state.stage == "upload":
     # Card 1: file
     _file_card_title = "영어 파일 (PPTX / Word)" if _is_en_ko else "한국어 PPTX 파일"
     _file_placeholder = "https://drive.google.com/file/d/...  또는  https://docs.google.com/document/d/..."
-    st.markdown(f'<div class="card"><div class="card-title">{_file_card_title}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="field-label">☁ Google Drive / Google Docs 링크</div>', unsafe_allow_html=True)
-    c1, c2 = st.columns([5, 1])
-    with c1:
-        drive_url = st.text_input(
-            "drive_url", placeholder=_file_placeholder,
-            label_visibility="collapsed", key="up_drive_url",
-        )
-    with c2:
-        fetch_clicked = st.button("가져오기", key="btn_fetch_main", use_container_width=True, type="primary")
-    if drive_url.strip() and not _gdrive_file_id(drive_url.strip()):
-        st.warning("올바른 Google Drive / Google Docs 링크가 아닙니다.")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(f'<div class="card-title">{_file_card_title}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="field-label">☁ Google Drive / Google Docs 링크</div>', unsafe_allow_html=True)
+        c1, c2 = st.columns([5, 1])
+        with c1:
+            drive_url = st.text_input(
+                "drive_url", placeholder=_file_placeholder,
+                label_visibility="collapsed", key="up_drive_url",
+            )
+        with c2:
+            fetch_clicked = st.button("가져오기", key="btn_fetch_main", use_container_width=True, type="primary")
+        if drive_url.strip() and not _gdrive_file_id(drive_url.strip()):
+            st.warning("올바른 Google Drive / Google Docs 링크가 아닙니다.")
 
     # Card 2: Brand name
-    st.markdown('<div class="card"><div class="card-title">브랜드명</div>', unsafe_allow_html=True)
-    c_ko, c_en = st.columns(2)
-    with c_ko:
-        st.markdown('<div class="field-label">한국어</div>', unsafe_allow_html=True)
-        brand_ko = st.text_input("brand_ko", placeholder="예: 삼성전자",
-            value=st.session_state.brand_name_ko, label_visibility="collapsed")
-    with c_en:
-        st.markdown('<div class="field-label">영어</div>', unsafe_allow_html=True)
-        brand_en = st.text_input("brand_en", placeholder="e.g. Samsung Electronics",
-            value=st.session_state.brand_name_en, label_visibility="collapsed")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<div class="card-title">브랜드명</div>', unsafe_allow_html=True)
+        c_ko, c_en = st.columns(2)
+        with c_ko:
+            st.markdown('<div class="field-label">한국어</div>', unsafe_allow_html=True)
+            brand_ko = st.text_input("brand_ko", placeholder="예: 삼성전자",
+                value=st.session_state.brand_name_ko, label_visibility="collapsed")
+        with c_en:
+            st.markdown('<div class="field-label">영어</div>', unsafe_allow_html=True)
+            brand_en = st.text_input("brand_en", placeholder="e.g. Samsung Electronics",
+                value=st.session_state.brand_name_en, label_visibility="collapsed")
 
     # Card 3: Term mapping (direction-aware labels)
     if _is_en_ko:
@@ -499,66 +509,62 @@ if st.session_state.stage == "upload":
         _kp_col1, _kp_col2 = "한국어", "영어"
         _kp_label1, _kp_label2 = "한국어 표현", "영어 번역 (선호)"
         _kp_init = st.session_state.key_phrases if st.session_state.key_phrases else [{"한국어": "", "영어": ""}]
-    st.markdown(
-        f'<div class="card"><div class="card-title">{_kp_title}</div>'
-        f'<div class="card-sub">{_kp_sub}</div>',
-        unsafe_allow_html=True,
-    )
-    edited_kp = st.data_editor(
-        pd.DataFrame(_kp_init),
-        column_config={
-            _kp_col1: st.column_config.TextColumn(_kp_label1, width="large"),
-            _kp_col2: st.column_config.TextColumn(_kp_label2, width="large"),
-        },
-        num_rows="dynamic", hide_index=True, use_container_width=True, key="kp_editor",
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(f'<div class="card-title">{_kp_title}</div><div class="card-sub">{_kp_sub}</div>', unsafe_allow_html=True)
+        edited_kp = st.data_editor(
+            pd.DataFrame(_kp_init),
+            column_config={
+                _kp_col1: st.column_config.TextColumn(_kp_label1, width="large"),
+                _kp_col2: st.column_config.TextColumn(_kp_label2, width="large"),
+            },
+            num_rows="dynamic", hide_index=True, use_container_width=True, key="kp_editor",
+        )
 
     # Cards only shown for ko→en
     ref_drive_url = ""
     font_file = None
     if not _is_en_ko:
         # Card 4: Reference PPTX (optional)
-        st.markdown(
-            '<div class="card"><div class="card-title">이전 번역본 참고 (선택)</div>'
-            '<div class="card-sub">기존 영문 PPT를 올리면 용어·문체를 참고해 일관성을 유지합니다.</div>'
-            '<div class="field-label">영문 참고 PPTX 링크 (선택)</div>',
-            unsafe_allow_html=True,
-        )
-        c3, c4 = st.columns([5, 1])
-        with c3:
-            ref_drive_url = st.text_input(
-                "ref_url", placeholder="https://drive.google.com/file/d/...",
-                label_visibility="collapsed", key="up_ref_url",
+        with st.container(border=True):
+            st.markdown(
+                '<div class="card-title">이전 번역본 참고 (선택)</div>'
+                '<div class="card-sub">기존 영문 PPT를 올리면 용어·문체를 참고해 일관성을 유지합니다.</div>'
+                '<div class="field-label">영문 참고 PPTX 링크 (선택)</div>',
+                unsafe_allow_html=True,
             )
-        with c4:
-            st.button("가져오기", key="btn_fetch_ref", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+            c3, c4 = st.columns([5, 1])
+            with c3:
+                ref_drive_url = st.text_input(
+                    "ref_url", placeholder="https://drive.google.com/file/d/...",
+                    label_visibility="collapsed", key="up_ref_url",
+                )
+            with c4:
+                st.button("가져오기", key="btn_fetch_ref", use_container_width=True)
 
         # Card 5: Font (optional)
-        st.markdown(
-            '<div class="card"><div class="card-title">영어 폰트 (선택) ✏️</div>'
-            '<div class="card-sub">번역된 텍스트에 적용할 TTF/OTF 폰트 파일을 업로드하세요.</div>',
-            unsafe_allow_html=True,
-        )
-        font_file = st.file_uploader("폰트 파일 (선택, TTF/OTF)", type=["ttf", "otf"], key="font_uploader",
-                                      label_visibility="collapsed")
-        if font_file:
-            st.caption(f"업로드: {font_file.name}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(
+                '<div class="card-title">영어 폰트 (선택)</div>'
+                '<div class="card-sub">번역된 텍스트에 적용할 TTF/OTF 폰트 파일을 업로드하세요.</div>',
+                unsafe_allow_html=True,
+            )
+            font_file = st.file_uploader("폰트 파일 (선택, TTF/OTF)", type=["ttf", "otf"], key="font_uploader",
+                                          label_visibility="collapsed")
+            if font_file:
+                st.caption(f"업로드: {font_file.name}")
 
     # Card 6: Proper nouns
     _noun_sub = "번역하지 않고 그대로 쓸 브랜드명, 인명, 제품명 등을 쉼표로 구분해 입력하세요."
-    st.markdown(
-        f'<div class="card"><div class="card-title">고유명사 / 번역하지 않을 단어</div>'
-        f'<div class="card-sub">{_noun_sub}</div>',
-        unsafe_allow_html=True,
-    )
-    glossary = st.text_input(
-        "glossary", placeholder="예: ChatGPT, POSCO, K-Beauty",
-        value=st.session_state.glossary, label_visibility="collapsed",
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(
+            f'<div class="card-title">고유명사 / 번역하지 않을 단어</div>'
+            f'<div class="card-sub">{_noun_sub}</div>',
+            unsafe_allow_html=True,
+        )
+        glossary = st.text_input(
+            "glossary", placeholder="예: ChatGPT, POSCO, K-Beauty",
+            value=st.session_state.glossary, label_visibility="collapsed",
+        )
 
     # Footer nav
     file_ready = bool(drive_url.strip() and _gdrive_file_id(drive_url.strip()))
@@ -656,8 +662,6 @@ if st.session_state.stage == "upload":
             st.session_state.active_classify_slide = 0
             st.session_state.stage = "classify"
         st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Stage: classify ───────────────────────────────────────────────────────────
