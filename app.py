@@ -776,6 +776,12 @@ elif st.session_state.stage == "classify":
         st.markdown('<div class="bezel">', unsafe_allow_html=True)
         st.markdown(_slide_img_html(active_slide), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:6px;">'
+            '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     # Right: legend + current slide text units (independently scrollable); nav buttons below
     with col_right:
@@ -994,6 +1000,12 @@ elif st.session_state.stage == "review_2a":
             '</div></div>',
             unsafe_allow_html=True,
         )
+        st.markdown(
+            '<div style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:4px;">'
+            '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     with col_panel:
         with st.container(height=650):
@@ -1181,6 +1193,12 @@ elif st.session_state.stage == "review_2b":
         st.markdown(
             f'<div class="bezel-caption">슬라이드 {slide_idx + 1}{_cap_extra}</div>'
             '</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:4px;">'
+            '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
+            '</div>',
             unsafe_allow_html=True,
         )
 

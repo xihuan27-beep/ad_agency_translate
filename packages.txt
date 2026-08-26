@@ -1,4 +1,5 @@
 libreoffice
 fonts-noto-cjk
 fonts-nanum
+fonts-unfonts-core
 poppler-utils
