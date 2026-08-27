@@ -40,9 +40,12 @@ st.markdown("""<style>
   --cbg: #F5F7FC;   /* cool off-white page bg */
   --ct:  #0D1B2A;   /* primary text */
   --cm:  #4A5B7A;   /* secondary text */
+  --ct3: #8A9BB8;   /* tertiary / faint text */
   --cb:  #DCE3F0;   /* border */
+  --cbf: #EDF0F8;   /* faint border (hairlines) */
   --cw:  #FFFFFF;
   --cbl: #E8ECFA;   /* light navy tint */
+  --cnt: #F3F5FD;   /* navy tint (very light) */
   --copy-accent: #2ECC46;  /* copy tag accent (green) */
   --copy-bg:     #EAFBEE;  /* copy tag bg */
   --copy-border: #A9E8B5;  /* copy tag border */
@@ -139,14 +142,14 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
 
 /* ── Slide bezel ── */
 .bezel {
-  background: #F0EFEC; border-radius: 12px; padding: 16px; margin-bottom: 0;
-  border: 1px solid var(--cb);
+  background: #18182A; border-radius: 10px; padding: 4px; margin-bottom: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,.2);
 }
-.bezel img { border-radius: 6px; width: 100%; display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.bezel img { border-radius: 7px; width: 100%; display: block; }
 .bezel-placeholder {
-  border-radius: 6px; background: #E8E6E2; width: 100%; aspect-ratio: 16/9;
+  border-radius: 7px; background: var(--cw); width: 100%; aspect-ratio: 16/9;
   display: flex; align-items: center; justify-content: center;
-  color: #9CA3AF; font-size: 14px;
+  color: var(--ct3); font-size: 14px;
 }
 .bezel-caption { color: var(--cm); font-size: 12.5px; margin-top: 10px; text-align: center; }
 
@@ -231,7 +234,7 @@ div.stDownloadButton > button[kind="primary"]:hover {
   font-size: 14px !important; box-shadow: none !important;
 }
 .stTextInput > div > div > input::placeholder,
-.stTextArea > div > div > textarea::placeholder { color: #9CA3AF !important; }
+.stTextArea > div > div > textarea::placeholder { color: var(--ct3) !important; }
 .stTextInput > div > div > input:focus,
 .stTextArea > div > div > textarea:focus {
   border-color: var(--cp) !important;
@@ -881,7 +884,7 @@ elif st.session_state.stage == "classify":
         st.markdown(_slide_img_html(active_slide), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:6px;">'
+            '<div style="font-size:11px;color:var(--ct3);text-align:center;margin-top:6px;">'
             '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
             '</div>',
             unsafe_allow_html=True,
@@ -906,7 +909,7 @@ elif st.session_state.stage == "classify":
                     unsafe_allow_html=True,
                 )
                 if not slide_items:
-                    st.markdown('<div style="font-size:13px;color:#667085;">이 슬라이드에 번역할 텍스트가 없습니다.</div>',
+                    st.markdown('<div style="font-size:13px;color:var(--cm);">이 슬라이드에 번역할 텍스트가 없습니다.</div>',
                                 unsafe_allow_html=True)
                 else:
                     # Bulk toggle row
@@ -934,7 +937,7 @@ elif st.session_state.stage == "classify":
                             with c_tag:
                                 if is_excluded:
                                     st.markdown(
-                                        '<p style="font-size:11px;color:#9CA3AF;margin:0;padding:5px 0;">제외됨</p>',
+                                        '<p style="font-size:11px;color:var(--ct3);margin:0;padding:5px 0;">제외됨</p>',
                                         unsafe_allow_html=True,
                                     )
                                 else:
@@ -946,7 +949,7 @@ elif st.session_state.stage == "classify":
                                         )
                                         rerun_needed = True
                             with c_text:
-                                _tc = "#9CA3AF" if is_excluded else "#101828"
+                                _tc = "var(--ct3)" if is_excluded else "var(--ct)"
                                 _td = "line-through" if is_excluded else "none"
                                 st.markdown(
                                     f"<p style='font-size:12.5px;color:{_tc};margin:0;"
@@ -1099,7 +1102,7 @@ elif st.session_state.stage == "review_2a":
             unsafe_allow_html=True,
         )
         st.markdown(
-            '<div style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:4px;">'
+            '<div style="font-size:11px;color:var(--ct3);text-align:center;margin-top:4px;">'
             '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
             '</div>',
             unsafe_allow_html=True,
@@ -1180,7 +1183,7 @@ elif st.session_state.stage == "review_2a":
     with c_counter:
         st.markdown(
             f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
-            f'color:#667085;font-weight:500;">{slide_pos+1}/{total_slides} 슬라이드</div>',
+            f'color:var(--cm);font-weight:500;">{slide_pos+1}/{total_slides} 슬라이드</div>',
             unsafe_allow_html=True,
         )
 
@@ -1225,7 +1228,7 @@ elif st.session_state.stage == "review_2b":
             except Exception as e:
                 st.error(f"카피 옵션 생성 중 오류가 발생했습니다: {e}")
                 st.markdown(
-                    '<div style="margin-top:8px;font-size:13px;color:#667085;">' +
+                    '<div style="margin-top:8px;font-size:13px;color:var(--cm);">' +
                     f'카피 항목 수: {n_copy}개' +
                     '</div>',
                     unsafe_allow_html=True,
@@ -1291,7 +1294,7 @@ elif st.session_state.stage == "review_2b":
             unsafe_allow_html=True,
         )
         st.markdown(
-            '<div style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:4px;">'
+            '<div style="font-size:11px;color:var(--ct3);text-align:center;margin-top:4px;">'
             '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
             '</div>',
             unsafe_allow_html=True,
@@ -1302,8 +1305,8 @@ elif st.session_state.stage == "review_2b":
 
         # Korean source text header
         st.markdown(
-            f'<div style="background:#F2F4F7;border-radius:8px;padding:10px 14px;'
-            f'font-size:14px;color:#344054;line-height:1.55;margin-bottom:12px;">'
+            f'<div style="background:var(--cw);border:1px solid var(--cb);border-radius:8px;padding:10px 14px;'
+            f'font-size:14px;color:var(--ct);line-height:1.55;margin-bottom:12px;">'
             f'{_html.escape(unit["ko_text"])}</div>',
             unsafe_allow_html=True,
         )
@@ -1312,9 +1315,9 @@ elif st.session_state.stage == "review_2b":
         if len(dup_slides) > 1:
             _slides_str = ", ".join(str(s + 1) for s in dup_slides)
             st.markdown(
-                f'<div style="font-size:12px;color:#667085;border-radius:6px;'
-                f'padding:6px 12px;margin-bottom:10px;background:#F9F5FF;'
-                f'border:1px solid #D6BBFB;">'
+                f'<div style="font-size:12px;color:var(--cp);border-radius:6px;'
+                f'padding:6px 12px;margin-bottom:10px;background:var(--cnt);'
+                f'border:1px solid var(--cbl);">'
                 f'🔁 슬라이드 {_slides_str}에 동일 카피 — 한 번 선택하면 모두 적용됩니다</div>',
                 unsafe_allow_html=True,
             )
@@ -1365,8 +1368,8 @@ elif st.session_state.stage == "review_2b":
 
         # Manual edit section
         st.markdown(
-            '<div style="margin-top:12px;border-top:1px solid #E5E7EB;padding-top:12px;">'
-            '<div style="font-size:12.5px;color:#6B7280;font-weight:500;margin-bottom:6px;">직접 수정</div>',
+            '<div style="margin-top:12px;border-top:1px solid var(--cb);padding-top:12px;">'
+            '<div style="font-size:12.5px;color:var(--cm);font-weight:500;margin-bottom:6px;">직접 수정</div>',
             unsafe_allow_html=True,
         )
         manual_val = st.text_area(
@@ -1403,8 +1406,8 @@ elif st.session_state.stage == "review_2b":
 
         # AI chat section
         st.markdown(
-            '<div style="margin-top:10px;border-top:1px solid #E5E7EB;padding-top:10px;">'
-            '<div style="font-size:12.5px;color:#6B7280;font-weight:500;margin-bottom:6px;">AI 수정 요청</div>',
+            '<div style="margin-top:10px;border-top:1px solid var(--cb);padding-top:10px;">'
+            '<div style="font-size:12.5px;color:var(--cm);font-weight:500;margin-bottom:6px;">AI 수정 요청</div>',
             unsafe_allow_html=True,
         )
         _chat_col, _chat_btn = st.columns([5, 1])
@@ -1444,7 +1447,7 @@ elif st.session_state.stage == "review_2b":
     with c_counter:
         st.markdown(
             f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
-            f'color:#667085;font-weight:500;">{idx+1}/{total} 카피</div>',
+            f'color:var(--cm);font-weight:500;">{idx+1}/{total} 카피</div>',
             unsafe_allow_html=True,
         )
 
