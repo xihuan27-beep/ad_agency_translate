@@ -35,15 +35,18 @@ st.markdown("""<style>
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
 :root {
-  --cp:  #CC6B2D;   /* Claude orange */
-  --cpa: #A8521C;   /* orange hover */
-  --cbg: #F9F8F6;   /* warm off-white page bg */
-  --ct:  #1A1A1A;   /* primary text */
-  --cm:  #6B7280;   /* secondary text */
-  --cb:  #E5E7EB;   /* border */
+  --cp:  #0C2790;   /* navy primary */
+  --cpa: #0f31ad;   /* navy hover */
+  --cbg: #F5F7FC;   /* cool off-white page bg */
+  --ct:  #0D1B2A;   /* primary text */
+  --cm:  #4A5B7A;   /* secondary text */
+  --cb:  #DCE3F0;   /* border */
   --cw:  #FFFFFF;
-  --cbl: #FFF4ED;   /* light orange tint */
-  --cs:  0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);  /* card shadow */
+  --cbl: #E8ECFA;   /* light navy tint */
+  --copy-accent: #B84500;  /* copy tag accent (burnt orange) */
+  --copy-bg:     #FFF4EC;  /* copy tag bg */
+  --copy-border: #FFCFA0;  /* copy tag border */
+  --cs:  0 1px 3px rgba(12,39,144,0.06), 0 4px 12px rgba(12,39,144,0.05);  /* card shadow */
   --r:   10px;
   --font: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
@@ -105,7 +108,7 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
   border: 1.5px solid var(--cb); background: transparent; color: var(--cm);
 }
 .step.active .step-n { background: var(--cp); color: #fff; border-color: var(--cp); }
-.step.done .step-n   { background: var(--cbl); color: var(--cpa); border-color: #F0C4A0; }
+.step.done .step-n   { background: var(--cbl); color: var(--cpa); border-color: #C7D2F0; }
 .step.done { color: var(--cm); }
 
 /* ── Card ── */
@@ -114,8 +117,10 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
   background: var(--cw); border-radius: var(--r);
   box-shadow: var(--cs); padding: 22px 24px; margin-bottom: 14px;
 }
-/* st.container(border=True) → restyle as card (used when widgets live inside) */
-[data-testid="stVerticalBlockBorderWrapper"] {
+/* st.container(border=True, key="card_...") → restyle as card (used when widgets live inside).
+   Streamlit no longer exposes a stable "border wrapper" testid, so every card container
+   is given an explicit key and targeted via its st-key-* class instead. */
+[class*="st-key-card_"] {
   background: var(--cw) !important;
   border: none !important;
   border-radius: var(--r) !important;
@@ -123,7 +128,6 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
   padding: 18px 22px !important;
   margin-bottom: 14px !important;
 }
-[data-testid="stVerticalBlockBorderWrapper"] > div { background: transparent !important; }
 .card-title { font-size: 14px; font-weight: 600; color: var(--ct); margin-bottom: 8px; }
 .card-sub   { font-size: 12.5px; color: var(--cm); margin-bottom: 14px; line-height: 1.55; }
 .field-label { font-size: 12px; color: var(--cm); font-weight: 500; margin-bottom: 5px; }
@@ -161,15 +165,23 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
 
 /* ── Copy option rows ── */
 .copyrow {
-  display: flex; align-items: center; gap: 14px;
-  padding: 13px 16px; border-radius: 8px; border: 1.5px solid var(--cb);
-  margin-bottom: 8px; background: var(--cw); transition: border-color .12s;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 13px 15px; border-radius: 8px; border: 1px solid var(--cb);
+  margin-bottom: 8px; background: var(--cw); box-shadow: var(--cs);
+  transition: background .12s, border-color .12s;
 }
-.copyrow.sel { background: var(--cbl); border-color: var(--cp); }
-.cr-label { flex: 0 0 120px; }
-.cr-lname { font-size: 13px; font-weight: 600; color: var(--ct); }
-.cr-lsub  { font-size: 11px; color: var(--cm); margin-top: 2px; }
-.cr-text  { flex: 1; font-size: 14.5px; font-weight: 500; color: var(--ct); }
+.copyrow.sel { background: var(--cp); border-color: var(--cp); }
+.cr-label { display: flex; align-items: center; gap: 8px; }
+.cr-lname {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 12px; background: var(--cbg); color: var(--cm);
+  border: 1px solid var(--cb);
+}
+.copyrow.sel .cr-lname { background: rgba(255,255,255,.14); color: rgba(255,255,255,.85); border-color: rgba(255,255,255,.25); }
+.cr-lsub  { font-size: 11px; color: var(--cm); }
+.copyrow.sel .cr-lsub { color: rgba(255,255,255,.65); }
+.cr-text  { font-size: 14.5px; font-weight: 500; color: var(--ct); line-height: 1.55; }
+.copyrow.sel .cr-text { color: #fff; }
 
 /* ── Recommendation ── */
 .recbox {
@@ -180,14 +192,14 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
 
 /* ── Tags ── */
 .tag-p { display:inline-flex;align-items:center;gap:4px;padding:2px 9px;
-  background:#FEF3C7;color:#92400E;border-radius:20px;font-size:11.5px;font-weight:600; }
+  background:var(--cbl);color:var(--cp);border-radius:20px;font-size:11.5px;font-weight:600; }
 .tag-c { display:inline-flex;align-items:center;gap:4px;padding:2px 9px;
-  background:var(--cbl);color:var(--cpa);border-radius:20px;font-size:11.5px;font-weight:600; }
+  background:var(--copy-bg);color:var(--copy-accent);border-radius:20px;font-size:11.5px;font-weight:600; }
 
 /* ── Legend ── */
 .legend-row { display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:var(--ct); }
-.dot-y { width:10px;height:10px;border-radius:50%;background:#F59E0B;flex-shrink:0; }
-.dot-b { width:10px;height:10px;border-radius:50%;background:var(--cp);flex-shrink:0; }
+.dot-y { width:10px;height:10px;border-radius:50%;background:var(--cp);flex-shrink:0; }
+.dot-b { width:10px;height:10px;border-radius:50%;background:var(--copy-accent);flex-shrink:0; }
 
 /* ── Classify item ── */
 .cl-item {
@@ -221,7 +233,7 @@ div.stButton > button[kind="primary"]:hover {
 .stTextInput > div > div > input:focus,
 .stTextArea > div > div > textarea:focus {
   border-color: var(--cp) !important;
-  box-shadow: 0 0 0 3px rgba(204,107,45,0.15) !important;
+  box-shadow: 0 0 0 3px rgba(12,39,144,0.15) !important;
 }
 .stSelectbox > div > div > div {
   background: #fff !important; color: var(--ct) !important;
@@ -245,6 +257,42 @@ div.stButton > button[kind="primary"]:hover {
   position: sticky !important;
   top: 106px !important;   /* topbar 58px + steprail 48px */
   align-self: flex-start !important;
+}
+
+/* ── Thumbnail strip: minimal "선택" pill under each numbered thumbnail ── */
+.st-key-thumb_strip div.stButton { margin: -6px 0 12px 21px; }
+.st-key-thumb_strip div.stButton > button {
+  font-size: 10.5px !important; padding: 1px 0 !important; height: 20px !important;
+  min-height: 20px !important; border-color: transparent !important;
+  color: var(--cm) !important; background: transparent !important; box-shadow: none !important;
+}
+.st-key-thumb_strip div.stButton > button:hover { color: var(--cp) !important; }
+.st-key-thumb_strip div.stButton > button[kind="primary"] {
+  background: var(--cbl) !important; color: var(--cp) !important; border-color: transparent !important;
+}
+
+/* ── Classify item cards: same card look, tighter padding than a full section card ── */
+[class*="st-key-item_card_"] {
+  background: var(--cw) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  box-shadow: var(--cs) !important;
+  padding: 11px 13px !important;
+  margin-bottom: 8px !important;
+}
+
+/* ── Review KO/EN pair block: white KO on top, navy EN on bottom, one seamless card ── */
+[class*="st-key-pair_"] {
+  background: var(--cw) !important; border: none !important; border-radius: var(--r) !important;
+  box-shadow: var(--cs) !important; padding: 0 !important; margin-bottom: 0 !important;
+  overflow: hidden !important; gap: 0 !important;
+}
+[class*="st-key-pair_"] [data-testid="stElementContainer"],
+[class*="st-key-pair_"] [data-testid="stTextArea"] { margin: 0 !important; }
+[class*="st-key-pair_"] textarea {
+  background: var(--cp) !important; color: #fff !important; border: none !important;
+  border-radius: 0 !important; box-shadow: none !important; padding: 13px 15px !important;
+  font-size: 13.5px !important; line-height: 1.7 !important; font-family: var(--font) !important;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -426,13 +474,15 @@ def _slide_img_html(slide_idx: int) -> str:
     return f'<div class="bezel-placeholder">슬라이드 {slide_idx + 1}</div>'
 
 def _thumb_html(slide_idx: int, active: bool) -> str:
-    border = "2px solid #0C2790" if active else "2px solid transparent"
-    imgs = st.session_state.slide_images
+    border = "2px solid #0C2790" if active else "2px solid #DCE3F0"
     inner = _slide_img_html(slide_idx)
     return (
-        f'<div style="border:{border};border-radius:6px;overflow:hidden;margin-bottom:4px;cursor:pointer;">'
+        f'<div style="display:flex;align-items:flex-start;gap:7px;">'
+        f'<span style="font-size:11px;color:#8A9BB8;font-weight:500;width:14px;'
+        f'text-align:right;padding-top:5px;flex-shrink:0;">{slide_idx+1}</span>'
+        f'<div style="flex:1;min-width:0;border:{border};border-radius:6px;overflow:hidden;">'
         f'{inner}'
-        f'<div style="text-align:center;font-size:11px;color:#667085;padding:2px 0 4px;background:#fff;">슬라이드 {slide_idx+1}</div>'
+        f'</div>'
         f'</div>'
     )
 
@@ -482,7 +532,7 @@ if st.session_state.stage == "upload":
     st.markdown('<div class="page">', unsafe_allow_html=True)
 
     # Direction selector
-    with st.container(border=True):
+    with st.container(border=True, key="card_direction"):
         st.markdown('<div class="card-title">번역 방향</div>', unsafe_allow_html=True)
         _dir_choice = st.radio(
             "direction",
@@ -509,7 +559,7 @@ if st.session_state.stage == "upload":
     # Card 1: file
     _file_card_title = "영어 파일 (PPTX / Word)" if _is_en_ko else "한국어 PPTX 파일"
     _file_placeholder = "https://drive.google.com/file/d/...  또는  https://docs.google.com/document/d/..."
-    with st.container(border=True):
+    with st.container(border=True, key="card_file"):
         st.markdown(f'<div class="card-title">{_file_card_title}</div>', unsafe_allow_html=True)
         st.markdown('<div class="field-label">☁ Google Drive / Google Docs 링크</div>', unsafe_allow_html=True)
         c1, c2 = st.columns([5, 1])
@@ -524,7 +574,7 @@ if st.session_state.stage == "upload":
             st.warning("올바른 Google Drive / Google Docs 링크가 아닙니다.")
 
     # Card 2: Brand name
-    with st.container(border=True):
+    with st.container(border=True, key="card_brand"):
         st.markdown('<div class="card-title">브랜드명</div>', unsafe_allow_html=True)
         c_ko, c_en = st.columns(2)
         with c_ko:
@@ -549,7 +599,7 @@ if st.session_state.stage == "upload":
         _kp_col1, _kp_col2 = "한국어", "영어"
         _kp_label1, _kp_label2 = "한국어 표현", "영어 번역 (선호)"
         _kp_init = st.session_state.key_phrases if st.session_state.key_phrases else [{"한국어": "", "영어": ""}]
-    with st.container(border=True):
+    with st.container(border=True, key="card_terms"):
         st.markdown(f'<div class="card-title">{_kp_title}</div><div class="card-sub">{_kp_sub}</div>', unsafe_allow_html=True)
         edited_kp = st.data_editor(
             pd.DataFrame(_kp_init),
@@ -565,7 +615,7 @@ if st.session_state.stage == "upload":
     font_file = None
     if not _is_en_ko:
         # Card 4: Reference PPTX (optional)
-        with st.container(border=True):
+        with st.container(border=True, key="card_ref"):
             st.markdown(
                 '<div class="card-title">이전 번역본 참고 (선택)</div>'
                 '<div class="card-sub">기존 영문 PPT를 올리면 용어·문체를 참고해 일관성을 유지합니다.</div>'
@@ -582,7 +632,7 @@ if st.session_state.stage == "upload":
                 st.button("가져오기", key="btn_fetch_ref", use_container_width=True)
 
         # Card 5: Font (optional)
-        with st.container(border=True):
+        with st.container(border=True, key="card_font"):
             st.markdown(
                 '<div class="card-title">영어 폰트 (선택)</div>'
                 '<div class="card-sub">번역된 텍스트에 적용할 TTF/OTF 폰트 파일을 업로드하세요.</div>',
@@ -595,7 +645,7 @@ if st.session_state.stage == "upload":
 
     # Card 6: Proper nouns
     _noun_sub = "번역하지 않고 그대로 쓸 브랜드명, 인명, 제품명 등을 쉼표로 구분해 입력하세요."
-    with st.container(border=True):
+    with st.container(border=True, key="card_glossary"):
         st.markdown(
             f'<div class="card-title">고유명사 / 번역하지 않을 단어</div>'
             f'<div class="card-sub">{_noun_sub}</div>',
@@ -761,11 +811,11 @@ elif st.session_state.stage == "classify":
 
     # Left: thumbnail strip — independently scrollable
     with col_left:
-        with st.container(height=650):
+        with st.container(height=650, key="thumb_strip"):
             for s_idx in range(n_slides):
                 is_active = (s_idx == active_slide)
                 st.markdown(_thumb_html(s_idx, is_active), unsafe_allow_html=True)
-                if st.button(f"슬라이드 {s_idx+1}", key=f"thumb_btn_{s_idx}",
+                if st.button("선택", key=f"thumb_btn_{s_idx}",
                              use_container_width=True,
                              type="primary" if is_active else "secondary"):
                     st.session_state.active_classify_slide = s_idx
@@ -826,51 +876,52 @@ elif st.session_state.stage == "classify":
                     short = u["ko_text"][:45] + ("…" if len(u["ko_text"]) > 45 else "")
                     has_next = pos + 1 < len(slide_items)
 
-                    c_tag, c_text, c_merge, c_excl = st.columns([1, 3, 0.5, 0.5])
-                    with c_tag:
-                        if is_excluded:
+                    with st.container(border=True, key=f"item_card_{u['id']}"):
+                        c_tag, c_text, c_merge, c_excl = st.columns([1, 3, 0.5, 0.5])
+                        with c_tag:
+                            if is_excluded:
+                                st.markdown(
+                                    '<p style="font-size:11px;color:#9CA3AF;margin:0;padding:5px 0;">제외됨</p>',
+                                    unsafe_allow_html=True,
+                                )
+                            else:
+                                tag_label = "발표용" if cat == "presentation" else "카피"
+                                tag_type = "secondary" if cat == "presentation" else "primary"
+                                if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
+                                    st.session_state.classified_units[i]["category"] = (
+                                        "presentation" if cat == "copy" else "copy"
+                                    )
+                                    rerun_needed = True
+                        with c_text:
+                            _tc = "#9CA3AF" if is_excluded else "#101828"
+                            _td = "line-through" if is_excluded else "none"
                             st.markdown(
-                                '<p style="font-size:11px;color:#9CA3AF;margin:0;padding:5px 0;">제외됨</p>',
+                                f"<p style='font-size:12.5px;color:{_tc};margin:0;"
+                                f"padding:5px 0;line-height:1.4;text-decoration:{_td};'>"
+                                f"{_html.escape(short)}</p>",
                                 unsafe_allow_html=True,
                             )
-                        else:
-                            tag_label = "발표용" if cat == "presentation" else "카피"
-                            tag_type = "secondary" if cat == "presentation" else "primary"
-                            if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
-                                st.session_state.classified_units[i]["category"] = (
-                                    "presentation" if cat == "copy" else "copy"
-                                )
-                                rerun_needed = True
-                    with c_text:
-                        _tc = "#9CA3AF" if is_excluded else "#101828"
-                        _td = "line-through" if is_excluded else "none"
-                        st.markdown(
-                            f"<p style='font-size:12.5px;color:{_tc};margin:0;"
-                            f"padding:5px 0;line-height:1.4;text-decoration:{_td};'>"
-                            f"{_html.escape(short)}</p>",
-                            unsafe_allow_html=True,
-                        )
-                    with c_merge:
-                        if has_next and not is_excluded:
-                            if st.button("↕", key=f"merge_{u['id']}", use_container_width=True,
-                                         help="다음 항목과 합치기"):
-                                j, _ = slide_items[pos + 1]
-                                cu = st.session_state.classified_units[i]
-                                cv = st.session_state.classified_units[j]
-                                merged = cu["ko_text"] + " " + cv["ko_text"]
-                                st.session_state.classified_units[i]["ko_text"] = merged
-                                st.session_state.classified_units[i]["shape_text"] = merged
-                                del st.session_state.classified_units[j]
-                                rerun_needed = True
-                    with c_excl:
-                        if is_excluded:
-                            if st.button("복원", key=f"excl_{u['id']}", use_container_width=True):
-                                st.session_state.excluded_unit_ids.remove(u["id"])
-                                rerun_needed = True
-                        else:
-                            if st.button("✕", key=f"excl_{u['id']}", use_container_width=True):
-                                st.session_state.excluded_unit_ids.append(u["id"])
-                                rerun_needed = True
+                        with c_merge:
+                            if has_next and not is_excluded:
+                                if st.button("↕", key=f"merge_{u['id']}", use_container_width=True,
+                                             help="다음 항목과 합치기"):
+                                    j, _ = slide_items[pos + 1]
+                                    cu = st.session_state.classified_units[i]
+                                    cv = st.session_state.classified_units[j]
+                                    merged = cu["ko_text"] + " " + cv["ko_text"]
+                                    st.session_state.classified_units[i]["ko_text"] = merged
+                                    st.session_state.classified_units[i]["shape_text"] = merged
+                                    del st.session_state.classified_units[j]
+                                    rerun_needed = True
+                        with c_excl:
+                            if is_excluded:
+                                if st.button("복원", key=f"excl_{u['id']}", use_container_width=True):
+                                    st.session_state.excluded_unit_ids.remove(u["id"])
+                                    rerun_needed = True
+                            else:
+                                if st.button("✕", key=f"excl_{u['id']}", use_container_width=True):
+                                    st.session_state.excluded_unit_ids.append(u["id"])
+                                    rerun_needed = True
 
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1022,33 +1073,30 @@ elif st.session_state.stage == "review_2a":
                 notes = item.get("notes", "") or item.get("clarification", "")
                 uid = unit["id"]
 
-                # Korean source
-                st.markdown(
-                    f'<div style="background:#F2F4F7;border-radius:8px 8px 0 0;'
-                    f'padding:10px 14px;font-size:13.5px;color:#344054;line-height:1.55;'
-                    f'border:1px solid #E4E7EC;border-bottom:none;">'
-                    f'{_html.escape(unit["ko_text"])}</div>',
-                    unsafe_allow_html=True,
-                )
-                # Editable English translation
-                new_val = st.text_area(
-                    label="",
-                    value=en_text,
-                    key=f"edit_en_{uid}",
-                    height=80,
-                    label_visibility="collapsed",
-                )
-                if new_val != en_text:
-                    st.session_state.presentation_translations[uid] = {
-                        **item, "en_text": new_val,
-                    }
-                # Notes
+                with st.container(border=True, key=f"pair_{uid}"):
+                    # Korean source (white block, top)
+                    st.markdown(
+                        f'<div style="padding:13px 15px;font-size:13.5px;color:var(--ct);'
+                        f'line-height:1.7;">{_html.escape(unit["ko_text"])}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    # Editable English translation (navy block, bottom)
+                    new_val = st.text_area(
+                        label="",
+                        value=en_text,
+                        key=f"edit_en_{uid}",
+                        height=80,
+                        label_visibility="collapsed",
+                    )
+                    if new_val != en_text:
+                        st.session_state.presentation_translations[uid] = {
+                            **item, "en_text": new_val,
+                        }
+
                 if notes:
                     st.markdown(
-                        f'<div style="background:#FFFBEA;border-radius:0 0 8px 8px;'
-                        f'padding:8px 14px;font-size:12px;color:#667085;line-height:1.5;'
-                        f'border:1px solid #E4E7EC;border-top:none;margin-bottom:14px;">'
-                        f'📝 {_html.escape(notes)}</div>',
+                        f'<div style="font-size:12px;color:var(--cm);line-height:1.5;'
+                        f'padding:0 4px;margin:-6px 0 14px;">📝 {_html.escape(notes)}</div>',
                         unsafe_allow_html=True,
                     )
                 else:
