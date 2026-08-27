@@ -43,9 +43,9 @@ st.markdown("""<style>
   --cb:  #DCE3F0;   /* border */
   --cw:  #FFFFFF;
   --cbl: #E8ECFA;   /* light navy tint */
-  --copy-accent: #B84500;  /* copy tag accent (burnt orange) */
-  --copy-bg:     #FFF4EC;  /* copy tag bg */
-  --copy-border: #FFCFA0;  /* copy tag border */
+  --copy-accent: #2ECC46;  /* copy tag accent (green) */
+  --copy-bg:     #EAFBEE;  /* copy tag bg */
+  --copy-border: #A9E8B5;  /* copy tag border */
   --cs:  0 1px 3px rgba(12,39,144,0.06), 0 4px 12px rgba(12,39,144,0.05);  /* card shadow */
   --r:   10px;
   --font: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -280,6 +280,16 @@ div.stButton > button[kind="primary"]:hover {
   padding: 11px 13px !important;
   margin-bottom: 8px !important;
 }
+
+/* ── Classify tag buttons: 발표용 = navy tint, 카피 = green tint ── */
+[class*="st-key-tog_pres_"] button, [class*="st-key-all_pres_"] button {
+  background: var(--cbl) !important; color: var(--cp) !important; border-color: rgba(12,39,144,.2) !important;
+}
+[class*="st-key-tog_pres_"] button:hover, [class*="st-key-all_pres_"] button:hover { border-color: var(--cp) !important; }
+[class*="st-key-tog_copy_"] button, [class*="st-key-all_copy_btn_"] button {
+  background: var(--copy-bg) !important; color: var(--copy-accent) !important; border-color: var(--copy-border) !important;
+}
+[class*="st-key-tog_copy_"] button:hover, [class*="st-key-all_copy_btn_"] button:hover { border-color: var(--copy-accent) !important; }
 
 /* ── Review KO/EN pair block: white KO on top, navy EN on bottom, one seamless card ── */
 [class*="st-key-pair_"] {
@@ -864,7 +874,7 @@ elif st.session_state.stage == "classify":
                             st.session_state.classified_units[i]["category"] = "presentation"
                         st.rerun()
                 with cb_all_c:
-                    if st.button("전체 카피", key=f"all_copy_{active_slide}", type="primary", use_container_width=True):
+                    if st.button("전체 카피", key=f"all_copy_btn_{active_slide}", type="secondary", use_container_width=True):
                         for i, u in slide_items:
                             st.session_state.classified_units[i]["category"] = "copy"
                         st.rerun()
@@ -886,8 +896,8 @@ elif st.session_state.stage == "classify":
                                 )
                             else:
                                 tag_label = "발표용" if cat == "presentation" else "카피"
-                                tag_type = "secondary" if cat == "presentation" else "primary"
-                                if st.button(tag_label, key=f"tog_{u['id']}", type=tag_type, use_container_width=True):
+                                tag_key = f"tog_pres_{u['id']}" if cat == "presentation" else f"tog_copy_{u['id']}"
+                                if st.button(tag_label, key=tag_key, type="secondary", use_container_width=True):
                                     st.session_state.classified_units[i]["category"] = (
                                         "presentation" if cat == "copy" else "copy"
                                     )
