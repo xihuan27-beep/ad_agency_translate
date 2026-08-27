@@ -281,6 +281,27 @@ div.stButton > button[kind="primary"]:hover {
   margin-bottom: 8px !important;
 }
 
+/* ── Direction picker: two large clickable cards (flags) ── */
+.dir-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dir-card {
+  padding: 22px 16px; border-radius: 10px; border: 2px solid var(--cb);
+  background: var(--cw); text-align: center; transition: border-color .15s, background .15s, color .15s;
+}
+.dir-card.selected { border-color: var(--cp); background: var(--cp); color: #fff; }
+.dir-arrow { font-size: 22px; display: block; margin-bottom: 8px; }
+.dir-title { font-size: 14px; font-weight: 600; }
+.dir-sub { font-size: 11.5px; opacity: .7; margin-top: 3px; }
+.dir-picked {
+  text-align: center; font-size: 12px; font-weight: 600; color: var(--cp);
+  padding: 7px 0 14px;
+}
+[class*="st-key-dir_pick_"] { margin: 6px 0 14px; }
+[class*="st-key-dir_pick_"] button {
+  font-size: 12.5px !important; color: var(--cm) !important;
+  background: var(--cw) !important; border-color: var(--cb) !important;
+}
+[class*="st-key-dir_pick_"] button:hover { color: var(--cp) !important; border-color: var(--cp) !important; }
+
 /* ── Classify tag buttons: 발표용 = navy tint, 카피 = green tint ── */
 [class*="st-key-tog_pres_"] button, [class*="st-key-all_pres_"] button {
   background: var(--cbl) !important; color: var(--cp) !important; border-color: rgba(12,39,144,.2) !important;
@@ -519,7 +540,7 @@ def _render_chrome():
         '<rect x="2" y="3" width="20" height="15" rx="2" stroke="white" stroke-width="2" fill="none"/>'
         '<path d="M8 22h8M12 18v4" stroke="white" stroke-width="2" stroke-linecap="round"/>'
         '</svg></div>'
-        '<span class="topbar-title">광고주 제안 문서 번역 시스템</span>'
+        '<span class="topbar-title">Agency Deck Translator</span>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -541,21 +562,37 @@ _render_chrome()
 if st.session_state.stage == "upload":
     st.markdown('<div class="page">', unsafe_allow_html=True)
 
-    # Direction selector
-    with st.container(border=True, key="card_direction"):
-        st.markdown('<div class="card-title">번역 방향</div>', unsafe_allow_html=True)
-        _dir_choice = st.radio(
-            "direction",
-            options=["한국어 → 영어  (제안서·PPT 영문화)", "영어 → 한국어  (광고주 영문 자료 이해용)"],
-            index=0 if st.session_state.direction == "ko_en" else 1,
-            label_visibility="collapsed",
-            horizontal=True,
-            key="dir_radio",
+    # Direction selector — two large clickable cards (matches approved mockup)
+    st.markdown('<div class="section-eyebrow">번역 방향</div>', unsafe_allow_html=True)
+    _dir_col1, _dir_col2 = st.columns(2)
+    with _dir_col1:
+        _sel = st.session_state.direction == "ko_en"
+        st.markdown(
+            f'<div class="dir-card{" selected" if _sel else ""}">'
+            f'<span class="dir-arrow">🇰🇷 → 🇺🇸</span>'
+            f'<div class="dir-title">한국어 → 영어</div>'
+            f'<div class="dir-sub">Korean to English</div></div>',
+            unsafe_allow_html=True,
         )
-    _dir = "ko_en" if "한국어" in _dir_choice.split("→")[0] else "en_ko"
-    if _dir != st.session_state.direction:
-        st.session_state.direction = _dir
-        st.rerun()
+        if _sel:
+            st.markdown('<div class="dir-picked">✓ 선택됨</div>', unsafe_allow_html=True)
+        elif st.button("이 방향 선택", key="dir_pick_ko_en", use_container_width=True):
+            st.session_state.direction = "ko_en"
+            st.rerun()
+    with _dir_col2:
+        _sel = st.session_state.direction == "en_ko"
+        st.markdown(
+            f'<div class="dir-card{" selected" if _sel else ""}">'
+            f'<span class="dir-arrow">🇺🇸 → 🇰🇷</span>'
+            f'<div class="dir-title">영어 → 한국어</div>'
+            f'<div class="dir-sub">English to Korean</div></div>',
+            unsafe_allow_html=True,
+        )
+        if _sel:
+            st.markdown('<div class="dir-picked">✓ 선택됨</div>', unsafe_allow_html=True)
+        elif st.button("이 방향 선택", key="dir_pick_en_ko", use_container_width=True):
+            st.session_state.direction = "en_ko"
+            st.rerun()
 
     _is_en_ko = st.session_state.direction == "en_ko"
 
@@ -583,20 +620,7 @@ if st.session_state.stage == "upload":
         if drive_url.strip() and not _gdrive_file_id(drive_url.strip()):
             st.warning("올바른 Google Drive / Google Docs 링크가 아닙니다.")
 
-    # Card 2: Brand name
-    with st.container(border=True, key="card_brand"):
-        st.markdown('<div class="card-title">브랜드명</div>', unsafe_allow_html=True)
-        c_ko, c_en = st.columns(2)
-        with c_ko:
-            st.markdown('<div class="field-label">한국어</div>', unsafe_allow_html=True)
-            brand_ko = st.text_input("brand_ko", placeholder="예: 삼성전자",
-                value=st.session_state.brand_name_ko, label_visibility="collapsed")
-        with c_en:
-            st.markdown('<div class="field-label">영어</div>', unsafe_allow_html=True)
-            brand_en = st.text_input("brand_en", placeholder="e.g. Samsung Electronics",
-                value=st.session_state.brand_name_en, label_visibility="collapsed")
-
-    # Card 3: Term mapping (direction-aware labels)
+    # Card 2: Translation quality info (brand name + term mapping, grouped as one section)
     if _is_en_ko:
         _kp_title = "주요 용어 매핑 (영어 → 한국어)"
         _kp_sub = "자주 쓰이는 영어 표현의 선호 한국어 번역을 지정합니다."
@@ -609,8 +633,22 @@ if st.session_state.stage == "upload":
         _kp_col1, _kp_col2 = "한국어", "영어"
         _kp_label1, _kp_label2 = "한국어 표현", "영어 번역 (선호)"
         _kp_init = st.session_state.key_phrases if st.session_state.key_phrases else [{"한국어": "", "영어": ""}]
-    with st.container(border=True, key="card_terms"):
-        st.markdown(f'<div class="card-title">{_kp_title}</div><div class="card-sub">{_kp_sub}</div>', unsafe_allow_html=True)
+    with st.container(border=True, key="card_quality"):
+        st.markdown(
+            '<div class="card-title">번역 품질 향상 정보 <span style="font-weight:400;opacity:.7;">(선택)</span></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div class="field-label" style="margin-top:4px;">브랜드명</div>', unsafe_allow_html=True)
+        c_ko, c_en = st.columns(2)
+        with c_ko:
+            brand_ko = st.text_input("brand_ko", placeholder="브랜드명 (한국어) — 예: 삼성전자",
+                value=st.session_state.brand_name_ko, label_visibility="collapsed")
+        with c_en:
+            brand_en = st.text_input("brand_en", placeholder="Brand name (EN) — e.g. Samsung Electronics",
+                value=st.session_state.brand_name_en, label_visibility="collapsed")
+
+        st.markdown(f'<div class="field-label" style="margin-top:14px;">{_kp_title}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card-sub">{_kp_sub}</div>', unsafe_allow_html=True)
         edited_kp = st.data_editor(
             pd.DataFrame(_kp_init),
             column_config={
