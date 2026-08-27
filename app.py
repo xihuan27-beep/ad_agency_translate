@@ -87,7 +87,7 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
   width: 32px; height: 32px; border-radius: 8px; background: var(--cp);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.topbar-title { font-size: 14.5px; font-weight: 600; color: var(--ct); letter-spacing: -0.01em; }
+.topbar-title { font-size: 19px; font-weight: 700; color: var(--cp); letter-spacing: -0.02em; }
 
 /* ── Step rail ── */
 .steprail {
@@ -99,19 +99,17 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
   font-size: 13px; font-weight: 500; color: var(--cm);
   position: relative; white-space: nowrap;
 }
-.step.active { color: var(--ct); font-weight: 600; }
+.step.active { color: var(--cp); font-weight: 600; }
 .step.active::after {
   content: ''; position: absolute; bottom: 0; left: 0; right: 0;
   height: 2px; background: var(--cp); border-radius: 2px 2px 0 0;
 }
 .step-n {
-  width: 22px; height: 22px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; flex-shrink: 0;
-  border: 1.5px solid var(--cb); background: transparent; color: var(--cm);
+  width: 7px; height: 7px; border-radius: 50%;
+  flex-shrink: 0; background: var(--cb); transition: background .15s;
 }
-.step.active .step-n { background: var(--cp); color: #fff; border-color: var(--cp); }
-.step.done .step-n   { background: var(--cbl); color: var(--cpa); border-color: #C7D2F0; }
+.step.active .step-n { background: var(--cp); }
+.step.done .step-n   { background: var(--cm); }
 .step.done { color: var(--cm); }
 
 /* ── Card ── */
@@ -334,6 +332,27 @@ div.stDownloadButton > button[kind="primary"]:hover {
   border-radius: 0 !important; box-shadow: none !important; padding: 13px 15px !important;
   font-size: 13.5px !important; line-height: 1.7 !important; font-family: var(--font) !important;
 }
+
+/* ── Copy option card: tag above an inline-editable box, no star ── */
+[class*="st-key-copyopt_"] {
+  background: var(--cw) !important; border-radius: 8px !important; box-shadow: var(--cs) !important;
+  padding: 13px 15px !important; margin-bottom: 8px !important; border: 1px solid var(--cb) !important;
+}
+[class*="st-key-copyopt_"] textarea {
+  border: none !important; box-shadow: none !important; background: transparent !important;
+  color: var(--ct) !important; font-size: 14.5px !important; font-weight: 500 !important;
+  padding: 0 !important; font-family: var(--font) !important;
+}
+[class*="st-key-copyopt_sel_"] {
+  background: var(--cp) !important; border-color: var(--cp) !important;
+}
+[class*="st-key-copyopt_sel_"] textarea,
+[class*="st-key-copyopt_sel_"] [data-baseweb="textarea"],
+[class*="st-key-copyopt_sel_"] [data-testid="stTextAreaRootElement"] { color: #fff !important; background: transparent !important; }
+[class*="st-key-copyopt_sel_"] .cr-lname {
+  background: rgba(255,255,255,.14) !important; color: rgba(255,255,255,.85) !important; border-color: rgba(255,255,255,.25) !important;
+}
+[class*="st-key-copyopt_sel_"] .cr-lsub { color: rgba(255,255,255,.65) !important; }
 </style>""", unsafe_allow_html=True)
 
 
@@ -561,7 +580,7 @@ def _render_chrome():
             cls = "step active"
         else:
             cls = "step"
-        items += f'<div class="{cls}"><span class="step-n">{i+1}</span>{label}</div>'
+        items += f'<div class="{cls}"><span class="step-n"></span>{label}</div>'
     st.markdown(f'<div class="steprail">{items}</div>', unsafe_allow_html=True)
 
 _render_chrome()
@@ -1331,29 +1350,42 @@ elif st.session_state.stage == "review_2b":
                 unsafe_allow_html=True,
             )
 
-        # Copy option rows
+        # Copy option rows — tag above box, directly editable in place, no star
         rerun_sel = False
         for i, (opt_name, opt_sub) in enumerate(OPTS_META):
             opt_text = options[i] if i < len(options) else ""
             is_sel = (current_sel == opt_text)
-            sel_cls = "copyrow sel" if is_sel else "copyrow"
-            star = "⭐" if is_sel else "☆"
 
-            c_row, c_star = st.columns([10, 1])
-            with c_row:
+            _card_key = f"copyopt_sel_{unit['id']}_{i}" if is_sel else f"copyopt_{unit['id']}_{i}"
+            with st.container(border=True, key=_card_key):
                 st.markdown(
-                    f'<div class="{sel_cls}">'
                     f'<div class="cr-label"><div class="cr-lname">{opt_name}</div>'
-                    f'<div class="cr-lsub">{opt_sub}</div></div>'
-                    f'<div class="cr-text">{_html.escape(opt_text)}</div>'
-                    f'</div>',
+                    f'<div class="cr-lsub">{opt_sub}</div></div>',
                     unsafe_allow_html=True,
                 )
-            with c_star:
-                if st.button(star, key=f"star_{unit['id']}_{i}"):
-                    for _gu in group:
-                        st.session_state.copy_selections[_gu["id"]] = opt_text
-                    rerun_sel = True
+                new_opt_text = st.text_area(
+                    opt_name, value=opt_text, key=f"opt_text_{unit['id']}_{i}",
+                    height=70, label_visibility="collapsed",
+                )
+                if new_opt_text != opt_text:
+                    was_selected = is_sel
+                    options[i] = new_opt_text
+                    st.session_state.copy_options[unit["id"]]["options"] = options
+                    if was_selected:
+                        for _gu in group:
+                            st.session_state.copy_selections[_gu["id"]] = new_opt_text
+                    st.rerun()
+                if not is_sel:
+                    if st.button("이 버전 사용", key=f"use_opt_{unit['id']}_{i}", use_container_width=True):
+                        for _gu in group:
+                            st.session_state.copy_selections[_gu["id"]] = opt_text
+                        rerun_sel = True
+                else:
+                    st.markdown(
+                        '<div style="text-align:center;font-size:12px;font-weight:600;'
+                        'color:#fff;padding:7px 0 0;">✓ 선택됨</div>',
+                        unsafe_allow_html=True,
+                    )
 
         if rerun_sel:
             st.rerun()
@@ -1366,34 +1398,14 @@ elif st.session_state.stage == "review_2b":
                 unsafe_allow_html=True,
             )
 
-        # Manual edit section
-        st.markdown(
-            '<div style="margin-top:12px;border-top:1px solid var(--cb);padding-top:12px;">'
-            '<div style="font-size:12.5px;color:var(--cm);font-weight:500;margin-bottom:6px;">직접 수정</div>',
-            unsafe_allow_html=True,
-        )
-        manual_val = st.text_area(
-            "직접 수정",
-            value=current_sel,
-            key=f"manual_copy_{unit['id']}",
-            height=70,
-            label_visibility="collapsed",
-        )
-        mc_use, mc_check = st.columns(2)
-        with mc_use:
-            if st.button("이 카피 사용", key=f"use_manual_{unit['id']}", use_container_width=True, type="primary"):
-                for _gu in group:
-                    st.session_state.copy_selections[_gu["id"]] = manual_val
-                st.rerun()
-        with mc_check:
-            if st.button("문법 체크", key=f"grammar_{unit['id']}", use_container_width=True):
-                with st.spinner("문법 체크 중..."):
-                    try:
-                        feedback = check_copy_grammar(unit["ko_text"], manual_val, _build_context())
-                        st.session_state.copy_grammar_results[unit["id"]] = feedback
-                    except Exception as e:
-                        st.session_state.copy_grammar_results[unit["id"]] = f"오류: {e}"
-                st.rerun()
+        if st.button("선택된 카피 문법 체크", key=f"grammar_{unit['id']}"):
+            with st.spinner("문법 체크 중..."):
+                try:
+                    feedback = check_copy_grammar(unit["ko_text"], current_sel, _build_context())
+                    st.session_state.copy_grammar_results[unit["id"]] = feedback
+                except Exception as e:
+                    st.session_state.copy_grammar_results[unit["id"]] = f"오류: {e}"
+            st.rerun()
         grammar_feedback = st.session_state.copy_grammar_results.get(unit["id"], "")
         if grammar_feedback:
             st.markdown(
@@ -1402,7 +1414,6 @@ elif st.session_state.stage == "review_2b":
                 f'✅ {_html.escape(grammar_feedback)}</div>',
                 unsafe_allow_html=True,
             )
-        st.markdown('</div>', unsafe_allow_html=True)
 
         # AI chat section
         st.markdown(
