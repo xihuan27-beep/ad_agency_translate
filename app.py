@@ -79,9 +79,11 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
 
 /* ── Top bar ── */
 .topbar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 0 32px; height: 58px;
-  background: var(--cw); border-bottom: 1px solid var(--cb);
+  height: 58px; background: var(--cw); border-bottom: 1px solid var(--cb);
+}
+.topbar-inner {
+  max-width: 1200px; margin: 0 auto; height: 100%; padding: 0 32px;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
 }
 .topbar-logo {
   width: 32px; height: 32px; border-radius: 8px; background: var(--cp);
@@ -91,8 +93,11 @@ section[data-testid="stMain"] { background: var(--cbg) !important; }
 
 /* ── Step rail ── */
 .steprail {
-  display: flex; align-items: stretch; border-bottom: 1px solid var(--cb);
-  background: var(--cw); padding: 0 28px; height: 48px;
+  border-bottom: 1px solid var(--cb); background: var(--cw); height: 48px;
+}
+.steprail-inner {
+  max-width: 1200px; margin: 0 auto; height: 100%; padding: 0 28px;
+  display: flex; align-items: stretch; justify-content: center;
 }
 .step {
   display: flex; align-items: center; gap: 7px; padding: 0 16px;
@@ -353,6 +358,12 @@ div.stDownloadButton > button[kind="primary"]:hover {
   background: rgba(255,255,255,.14) !important; color: rgba(255,255,255,.85) !important; border-color: rgba(255,255,255,.25) !important;
 }
 [class*="st-key-copyopt_sel_"] .cr-lsub { color: rgba(255,255,255,.65) !important; }
+
+/* ── 발표용 감수 / 카피 선택: centered content with side margins, not edge-to-edge ── */
+[class*="st-key-review_2a_wrap"],
+[class*="st-key-review_2b_wrap"] {
+  max-width: 1200px !important; margin: 0 auto !important; padding: 0 40px !important;
+}
 </style>""", unsafe_allow_html=True)
 
 
@@ -562,14 +573,14 @@ def _render_chrome():
     curr_stage = st.session_state.stage
     curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
     st.markdown(
-        '<div class="topbar">'
+        '<div class="topbar"><div class="topbar-inner">'
         '<div class="topbar-logo">'
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">'
         '<rect x="2" y="3" width="20" height="15" rx="2" stroke="white" stroke-width="2" fill="none"/>'
         '<path d="M8 22h8M12 18v4" stroke="white" stroke-width="2" stroke-linecap="round"/>'
         '</svg></div>'
         '<span class="topbar-title">Agency Deck Translator</span>'
-        '</div>',
+        '</div></div>',
         unsafe_allow_html=True,
     )
     items = ""
@@ -581,7 +592,7 @@ def _render_chrome():
         else:
             cls = "step"
         items += f'<div class="{cls}"><span class="step-n"></span>{label}</div>'
-    st.markdown(f'<div class="steprail">{items}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="steprail"><div class="steprail-inner">{items}</div></div>', unsafe_allow_html=True)
 
 _render_chrome()
 
@@ -1068,411 +1079,413 @@ elif st.session_state.stage == "classify":
 
 # ── Stage: review_2a ──────────────────────────────────────────────────────────
 elif st.session_state.stage == "review_2a":
+    with st.container(key="review_2a_wrap"):
 
-    pres_units = st.session_state.presentation_units
+        pres_units = st.session_state.presentation_units
 
-    if not st.session_state.translations_loaded:
-        with st.spinner("AI가 발표용 텍스트를 일괄 번역하는 중..."):
-            try:
-                trans = translate_presentation_texts(pres_units, _build_context())
-                st.session_state.presentation_translations = trans
-                st.session_state.translations_loaded = True
-            except Exception as e:
-                st.error(f"번역 오류: {e}")
-                st.stop()
-        st.rerun()
-
-    if not pres_units:
-        st.info("발표용 텍스트가 없습니다.")
-        if st.button("카피 선택으로 →"):
-            st.session_state.stage = "review_2b"
-            st.rerun()
-        st.stop()
-
-    trans = st.session_state.presentation_translations
-
-    # Group by slide and navigate slide-by-slide
-    pres_by_slide = defaultdict(list)
-    for u in pres_units:
-        pres_by_slide[u["slide_idx"]].append(u)
-    slide_keys = sorted(pres_by_slide.keys())
-    total_slides = len(slide_keys)
-
-    slide_pos = st.session_state.current_pres_idx
-    if slide_pos >= total_slides:
-        slide_pos = total_slides - 1
-        st.session_state.current_pres_idx = slide_pos
-    slide_idx = slide_keys[slide_pos]
-    slide_units = pres_by_slide[slide_idx]
-
-    # ── Two-column layout ───────────────────────────────────────────────────
-    col_img, col_panel = st.columns([2, 3])
-
-    with col_img:
-        st.markdown(
-            '<div class="review-img-panel">'
-            '<div class="bezel">',
-            unsafe_allow_html=True,
-        )
-        st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="bezel-caption">슬라이드 {slide_idx + 1}</div>'
-            '</div></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<div style="font-size:11px;color:var(--ct3);text-align:center;margin-top:4px;">'
-            '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-    with col_panel:
-        with st.container(height=650):
-            # Check if translations are actually populated — show retry if empty
-            _n_translated = sum(1 for u in slide_units if trans.get(u["id"], {}).get("en_text", "").strip())
-            if len(slide_units) > 0 and _n_translated == 0:
-                st.warning(f"번역 결과가 없습니다 (0/{len(slide_units)}). 번역을 다시 실행해주세요.")
-                if st.button("번역 재실행", key="retry_trans", type="primary"):
-                    st.session_state.translations_loaded = False
-                    st.rerun()
-            for unit in slide_units:
-                item = trans.get(unit["id"], {})
-                en_text = item.get("en_text", "")
-                notes = item.get("notes", "") or item.get("clarification", "")
-                uid = unit["id"]
-
-                with st.container(border=True, key=f"pair_{uid}"):
-                    # Korean source (white block, top)
-                    st.markdown(
-                        f'<div style="padding:13px 15px;font-size:13.5px;color:var(--ct);'
-                        f'line-height:1.7;">{_html.escape(unit["ko_text"])}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    # Editable English translation (navy block, bottom)
-                    new_val = st.text_area(
-                        label="",
-                        value=en_text,
-                        key=f"edit_en_{uid}",
-                        height=80,
-                        label_visibility="collapsed",
-                    )
-                    if new_val != en_text:
-                        st.session_state.presentation_translations[uid] = {
-                            **item, "en_text": new_val,
-                        }
-
-                if notes:
-                    st.markdown(
-                        f'<div style="font-size:12px;color:var(--cm);line-height:1.5;'
-                        f'padding:0 4px;margin:-6px 0 14px;">📝 {_html.escape(notes)}</div>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown('<div style="margin-bottom:14px;"></div>', unsafe_allow_html=True)
-
-    # ── AI chat refinement ──────────────────────────────────────────────────
-    user_msg = st.chat_input(
-        f"이 슬라이드 번역 수정 요청 ({slide_pos+1}/{total_slides} 슬라이드)", key="chat_2a"
-    )
-    if user_msg:
-        with st.spinner("번역 수정 중..."):
-            for unit in slide_units:
-                item = trans.get(unit["id"], {})
-                en_text = item.get("en_text", "")
+        if not st.session_state.translations_loaded:
+            with st.spinner("AI가 발표용 텍스트를 일괄 번역하는 중..."):
                 try:
-                    refined = chat_refine_copy(unit["ko_text"], en_text, user_msg, _build_context())
-                    st.session_state.presentation_translations[unit["id"]] = {
-                        **item, "en_text": refined,
-                    }
-                except Exception:
-                    pass
-        st.rerun()
+                    trans = translate_presentation_texts(pres_units, _build_context())
+                    st.session_state.presentation_translations = trans
+                    st.session_state.translations_loaded = True
+                except Exception as e:
+                    st.error(f"번역 오류: {e}")
+                    st.stop()
+            st.rerun()
 
-    # ── Navigation bar ──────────────────────────────────────────────────────
-    c_prev, c_counter, c_next_btn = st.columns([1, 1.5, 1])
-    with c_prev:
-        if st.button("＜", key="2a_prev", disabled=(slide_pos == 0), use_container_width=True):
-            st.session_state.current_pres_idx -= 1
-            st.rerun()
-    with c_next_btn:
-        if st.button("＞", key="2a_next", disabled=(slide_pos >= total_slides - 1), use_container_width=True):
-            st.session_state.current_pres_idx += 1
-            st.rerun()
-    with c_counter:
-        st.markdown(
-            f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
-            f'color:var(--cm);font-weight:500;">{slide_pos+1}/{total_slides} 슬라이드</div>',
-            unsafe_allow_html=True,
-        )
-
-    _has_copy = bool(st.session_state.copy_units)
-    _n_copy = len(st.session_state.copy_units)
-    _next_label = f"다음 단계: 카피 선택 ({_n_copy}개) →" if _has_copy else "다음 단계: 다운로드 →"
-    c_2a_back, c_2a_fwd = st.columns([1, 2])
-    with c_2a_back:
-        if st.button("← 분류로 돌아가기", key="2a_back", use_container_width=True):
-            st.session_state.stage = "classify"
-            st.rerun()
-    with c_2a_fwd:
-        if st.button(_next_label, key="2a_done", type="primary", use_container_width=True):
-            if _has_copy:
-                st.session_state.copy_options_loaded = False
+        if not pres_units:
+            st.info("발표용 텍스트가 없습니다.")
+            if st.button("카피 선택으로 →"):
                 st.session_state.stage = "review_2b"
-            else:
-                st.session_state.stage = "download"
+                st.rerun()
+            st.stop()
+
+        trans = st.session_state.presentation_translations
+
+        # Group by slide and navigate slide-by-slide
+        pres_by_slide = defaultdict(list)
+        for u in pres_units:
+            pres_by_slide[u["slide_idx"]].append(u)
+        slide_keys = sorted(pres_by_slide.keys())
+        total_slides = len(slide_keys)
+
+        slide_pos = st.session_state.current_pres_idx
+        if slide_pos >= total_slides:
+            slide_pos = total_slides - 1
+            st.session_state.current_pres_idx = slide_pos
+        slide_idx = slide_keys[slide_pos]
+        slide_units = pres_by_slide[slide_idx]
+
+        # ── Two-column layout ───────────────────────────────────────────────────
+        col_img, col_panel = st.columns([2, 3])
+
+        with col_img:
+            st.markdown(
+                '<div class="review-img-panel">'
+                '<div class="bezel">',
+                unsafe_allow_html=True,
+            )
+            st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="bezel-caption">슬라이드 {slide_idx + 1}</div>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div style="font-size:11px;color:var(--ct3);text-align:center;margin-top:4px;">'
+                '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+        with col_panel:
+            with st.container(height=650):
+                # Check if translations are actually populated — show retry if empty
+                _n_translated = sum(1 for u in slide_units if trans.get(u["id"], {}).get("en_text", "").strip())
+                if len(slide_units) > 0 and _n_translated == 0:
+                    st.warning(f"번역 결과가 없습니다 (0/{len(slide_units)}). 번역을 다시 실행해주세요.")
+                    if st.button("번역 재실행", key="retry_trans", type="primary"):
+                        st.session_state.translations_loaded = False
+                        st.rerun()
+                for unit in slide_units:
+                    item = trans.get(unit["id"], {})
+                    en_text = item.get("en_text", "")
+                    notes = item.get("notes", "") or item.get("clarification", "")
+                    uid = unit["id"]
+
+                    with st.container(border=True, key=f"pair_{uid}"):
+                        # Korean source (white block, top)
+                        st.markdown(
+                            f'<div style="padding:13px 15px;font-size:13.5px;color:var(--ct);'
+                            f'line-height:1.7;">{_html.escape(unit["ko_text"])}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        # Editable English translation (navy block, bottom)
+                        new_val = st.text_area(
+                            label="",
+                            value=en_text,
+                            key=f"edit_en_{uid}",
+                            height=80,
+                            label_visibility="collapsed",
+                        )
+                        if new_val != en_text:
+                            st.session_state.presentation_translations[uid] = {
+                                **item, "en_text": new_val,
+                            }
+
+                    if notes:
+                        st.markdown(
+                            f'<div style="font-size:12px;color:var(--cm);line-height:1.5;'
+                            f'padding:0 4px;margin:-6px 0 14px;">📝 {_html.escape(notes)}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown('<div style="margin-bottom:14px;"></div>', unsafe_allow_html=True)
+
+        # ── AI chat refinement ──────────────────────────────────────────────────
+        user_msg = st.chat_input(
+            f"이 슬라이드 번역 수정 요청 ({slide_pos+1}/{total_slides} 슬라이드)", key="chat_2a"
+        )
+        if user_msg:
+            with st.spinner("번역 수정 중..."):
+                for unit in slide_units:
+                    item = trans.get(unit["id"], {})
+                    en_text = item.get("en_text", "")
+                    try:
+                        refined = chat_refine_copy(unit["ko_text"], en_text, user_msg, _build_context())
+                        st.session_state.presentation_translations[unit["id"]] = {
+                            **item, "en_text": refined,
+                        }
+                    except Exception:
+                        pass
             st.rerun()
+
+        # ── Navigation bar ──────────────────────────────────────────────────────
+        c_prev, c_counter, c_next_btn = st.columns([1, 1.5, 1])
+        with c_prev:
+            if st.button("＜", key="2a_prev", disabled=(slide_pos == 0), use_container_width=True):
+                st.session_state.current_pres_idx -= 1
+                st.rerun()
+        with c_next_btn:
+            if st.button("＞", key="2a_next", disabled=(slide_pos >= total_slides - 1), use_container_width=True):
+                st.session_state.current_pres_idx += 1
+                st.rerun()
+        with c_counter:
+            st.markdown(
+                f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
+                f'color:var(--cm);font-weight:500;">{slide_pos+1}/{total_slides} 슬라이드</div>',
+                unsafe_allow_html=True,
+            )
+
+        _has_copy = bool(st.session_state.copy_units)
+        _n_copy = len(st.session_state.copy_units)
+        _next_label = f"다음 단계: 카피 선택 ({_n_copy}개) →" if _has_copy else "다음 단계: 다운로드 →"
+        c_2a_back, c_2a_fwd = st.columns([1, 2])
+        with c_2a_back:
+            if st.button("← 분류로 돌아가기", key="2a_back", use_container_width=True):
+                st.session_state.stage = "classify"
+                st.rerun()
+        with c_2a_fwd:
+            if st.button(_next_label, key="2a_done", type="primary", use_container_width=True):
+                if _has_copy:
+                    st.session_state.copy_options_loaded = False
+                    st.session_state.stage = "review_2b"
+                else:
+                    st.session_state.stage = "download"
+                st.rerun()
 
 
 # ── Stage: review_2b ──────────────────────────────────────────────────────────
 elif st.session_state.stage == "review_2b":
+    with st.container(key="review_2b_wrap"):
 
-    copy_units = st.session_state.copy_units
+        copy_units = st.session_state.copy_units
 
-    if not st.session_state.copy_options_loaded:
-        n_copy = len(copy_units)
-        st.markdown(
-            f'<div style="padding:24px 32px 8px;">',
-            unsafe_allow_html=True,
-        )
-        with st.spinner(f"AI가 카피 옵션을 생성하는 중... ({n_copy}개 카피 항목)"):
-            try:
-                opts = generate_copy_options(copy_units, _build_context())
-                st.session_state.copy_options = opts
-                st.session_state.copy_selections = {
-                    u["id"]: opts.get(u["id"], {}).get("options", [""])[0]
-                    for u in copy_units
-                }
-                st.session_state.copy_options_loaded = True
-            except Exception as e:
-                st.error(f"카피 옵션 생성 중 오류가 발생했습니다: {e}")
-                st.markdown(
-                    '<div style="margin-top:8px;font-size:13px;color:var(--cm);">' +
-                    f'카피 항목 수: {n_copy}개' +
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button("다시 시도", key="retry_copy", type="primary"):
-                    st.rerun()
-                st.stop()
-        st.rerun()
-
-    # Group duplicate ko_text — user selects once for all occurrences
-    _ko_groups: dict = {}
-    for u in copy_units:
-        _ko_groups.setdefault(u["ko_text"], []).append(u)
-    unique_groups = list(_ko_groups.values())
-
-    total = len(unique_groups)
-    idx = st.session_state.current_copy_idx
-    if idx >= total:
-        idx = total - 1
-        st.session_state.current_copy_idx = idx
-    if total == 0:
-        st.info("카피 텍스트가 없습니다.")
-        if st.button("다운로드 →"):
-            st.session_state.stage = "download"
-            st.rerun()
-        st.stop()
-
-    group = unique_groups[idx]
-    unit = group[0]  # representative unit for copy_options lookup
-    unit_data = st.session_state.copy_options.get(unit["id"], {})
-    options = unit_data.get("options", ["", "", ""])
-    notes = unit_data.get("notes", "")
-    recommendation = unit_data.get("recommendation", "")
-    cultural_flag = unit_data.get("cultural_flag", "")
-    clarification = unit_data.get("clarification", "")
-    current_sel = st.session_state.copy_selections.get(unit["id"], options[0] if options else "")
-    slide_idx = unit["slide_idx"]
-    dup_slides = sorted({u["slide_idx"] for u in group})
-
-    OPTS_META = [
-        ("의역", "Feel, rhythm, impact 우선"),
-        ("균형", "의미 + 자연스러운 영어"),
-        ("직역", "원문 의미 중심"),
-    ]
-
-    # ── Two-column layout ───────────────────────────────────────────────────
-    col_img, col_panel = st.columns([2, 3])
-
-    with col_img:
-        st.markdown(
-            '<div style="padding:16px 0 16px 24px;">'
-            '<div class="bezel">',
-            unsafe_allow_html=True,
-        )
-        st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
-        _cap_extra = ""
-        if len(dup_slides) > 1:
-            _slides_str = ", ".join(str(s + 1) for s in dup_slides)
-            _cap_extra = f' (슬라이드 {_slides_str}에 반복)'
-        st.markdown(
-            f'<div class="bezel-caption">슬라이드 {slide_idx + 1}{_cap_extra}</div>'
-            '</div></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<div style="font-size:11px;color:var(--ct3);text-align:center;margin-top:4px;">'
-            '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-    with col_panel:
-        st.markdown('<div style="padding:16px 24px 0 8px;">', unsafe_allow_html=True)
-
-        # Korean source text header
-        st.markdown(
-            f'<div style="background:var(--cw);border:1px solid var(--cb);border-radius:8px;padding:10px 14px;'
-            f'font-size:14px;color:var(--ct);line-height:1.55;margin-bottom:12px;">'
-            f'{_html.escape(unit["ko_text"])}</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Duplicate notice
-        if len(dup_slides) > 1:
-            _slides_str = ", ".join(str(s + 1) for s in dup_slides)
+        if not st.session_state.copy_options_loaded:
+            n_copy = len(copy_units)
             st.markdown(
-                f'<div style="font-size:12px;color:var(--cp);border-radius:6px;'
-                f'padding:6px 12px;margin-bottom:10px;background:var(--cnt);'
-                f'border:1px solid var(--cbl);">'
-                f'🔁 슬라이드 {_slides_str}에 동일 카피 — 한 번 선택하면 모두 적용됩니다</div>',
+                f'<div style="padding:24px 32px 8px;">',
                 unsafe_allow_html=True,
             )
-
-        # Notes
-        note_content = notes or clarification or cultural_flag
-        if note_content:
-            st.markdown(
-                f'<div class="notebox"><div class="notebox-icon">📝</div>'
-                f'<div style="font-size:13px;">{_html.escape(note_content)}</div></div>',
-                unsafe_allow_html=True,
-            )
-
-        # Copy option rows — tag above box, directly editable in place, no star
-        rerun_sel = False
-        for i, (opt_name, opt_sub) in enumerate(OPTS_META):
-            opt_text = options[i] if i < len(options) else ""
-            is_sel = (current_sel == opt_text)
-
-            _card_key = f"copyopt_sel_{unit['id']}_{i}" if is_sel else f"copyopt_{unit['id']}_{i}"
-            with st.container(border=True, key=_card_key):
-                st.markdown(
-                    f'<div class="cr-label"><div class="cr-lname">{opt_name}</div>'
-                    f'<div class="cr-lsub">{opt_sub}</div></div>',
-                    unsafe_allow_html=True,
-                )
-                new_opt_text = st.text_area(
-                    opt_name, value=opt_text, key=f"opt_text_{unit['id']}_{i}",
-                    height=70, label_visibility="collapsed",
-                )
-                if new_opt_text != opt_text:
-                    was_selected = is_sel
-                    options[i] = new_opt_text
-                    st.session_state.copy_options[unit["id"]]["options"] = options
-                    if was_selected:
-                        for _gu in group:
-                            st.session_state.copy_selections[_gu["id"]] = new_opt_text
-                    st.rerun()
-                if not is_sel:
-                    if st.button("이 버전 사용", key=f"use_opt_{unit['id']}_{i}", use_container_width=True):
-                        for _gu in group:
-                            st.session_state.copy_selections[_gu["id"]] = opt_text
-                        rerun_sel = True
-                else:
+            with st.spinner(f"AI가 카피 옵션을 생성하는 중... ({n_copy}개 카피 항목)"):
+                try:
+                    opts = generate_copy_options(copy_units, _build_context())
+                    st.session_state.copy_options = opts
+                    st.session_state.copy_selections = {
+                        u["id"]: opts.get(u["id"], {}).get("options", [""])[0]
+                        for u in copy_units
+                    }
+                    st.session_state.copy_options_loaded = True
+                except Exception as e:
+                    st.error(f"카피 옵션 생성 중 오류가 발생했습니다: {e}")
                     st.markdown(
-                        '<div style="text-align:center;font-size:12px;font-weight:600;'
-                        'color:#fff;padding:7px 0 0;">✓ 선택됨</div>',
+                        '<div style="margin-top:8px;font-size:13px;color:var(--cm);">' +
+                        f'카피 항목 수: {n_copy}개' +
+                        '</div>',
                         unsafe_allow_html=True,
                     )
-
-        if rerun_sel:
+                    if st.button("다시 시도", key="retry_copy", type="primary"):
+                        st.rerun()
+                    st.stop()
             st.rerun()
 
-        # Recommendation box
-        if recommendation:
+        # Group duplicate ko_text — user selects once for all occurrences
+        _ko_groups: dict = {}
+        for u in copy_units:
+            _ko_groups.setdefault(u["ko_text"], []).append(u)
+        unique_groups = list(_ko_groups.values())
+
+        total = len(unique_groups)
+        idx = st.session_state.current_copy_idx
+        if idx >= total:
+            idx = total - 1
+            st.session_state.current_copy_idx = idx
+        if total == 0:
+            st.info("카피 텍스트가 없습니다.")
+            if st.button("다운로드 →"):
+                st.session_state.stage = "download"
+                st.rerun()
+            st.stop()
+
+        group = unique_groups[idx]
+        unit = group[0]  # representative unit for copy_options lookup
+        unit_data = st.session_state.copy_options.get(unit["id"], {})
+        options = unit_data.get("options", ["", "", ""])
+        notes = unit_data.get("notes", "")
+        recommendation = unit_data.get("recommendation", "")
+        cultural_flag = unit_data.get("cultural_flag", "")
+        clarification = unit_data.get("clarification", "")
+        current_sel = st.session_state.copy_selections.get(unit["id"], options[0] if options else "")
+        slide_idx = unit["slide_idx"]
+        dup_slides = sorted({u["slide_idx"] for u in group})
+
+        OPTS_META = [
+            ("의역", "Feel, rhythm, impact 우선"),
+            ("균형", "의미 + 자연스러운 영어"),
+            ("직역", "원문 의미 중심"),
+        ]
+
+        # ── Two-column layout ───────────────────────────────────────────────────
+        col_img, col_panel = st.columns([2, 3])
+
+        with col_img:
             st.markdown(
-                f'<div class="recbox"><div style="font-size:18px;flex-shrink:0;">📌</div>'
-                f'<div><strong>추천 이유:</strong> {_html.escape(recommendation)}</div></div>',
+                '<div style="padding:16px 0 16px 24px;">'
+                '<div class="bezel">',
+                unsafe_allow_html=True,
+            )
+            st.markdown(_slide_img_html(slide_idx), unsafe_allow_html=True)
+            _cap_extra = ""
+            if len(dup_slides) > 1:
+                _slides_str = ", ".join(str(s + 1) for s in dup_slides)
+                _cap_extra = f' (슬라이드 {_slides_str}에 반복)'
+            st.markdown(
+                f'<div class="bezel-caption">슬라이드 {slide_idx + 1}{_cap_extra}</div>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div style="font-size:11px;color:var(--ct3);text-align:center;margin-top:4px;">'
+                '미리보기는 서버 폰트 제한으로 실제 PPT와 다를 수 있습니다'
+                '</div>',
                 unsafe_allow_html=True,
             )
 
-        if st.button("선택된 카피 문법 체크", key=f"grammar_{unit['id']}"):
-            with st.spinner("문법 체크 중..."):
+        with col_panel:
+            st.markdown('<div style="padding:16px 24px 0 8px;">', unsafe_allow_html=True)
+
+            # Korean source text header
+            st.markdown(
+                f'<div style="background:var(--cw);border:1px solid var(--cb);border-radius:8px;padding:10px 14px;'
+                f'font-size:14px;color:var(--ct);line-height:1.55;margin-bottom:12px;">'
+                f'{_html.escape(unit["ko_text"])}</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Duplicate notice
+            if len(dup_slides) > 1:
+                _slides_str = ", ".join(str(s + 1) for s in dup_slides)
+                st.markdown(
+                    f'<div style="font-size:12px;color:var(--cp);border-radius:6px;'
+                    f'padding:6px 12px;margin-bottom:10px;background:var(--cnt);'
+                    f'border:1px solid var(--cbl);">'
+                    f'🔁 슬라이드 {_slides_str}에 동일 카피 — 한 번 선택하면 모두 적용됩니다</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Notes
+            note_content = notes or clarification or cultural_flag
+            if note_content:
+                st.markdown(
+                    f'<div class="notebox"><div class="notebox-icon">📝</div>'
+                    f'<div style="font-size:13px;">{_html.escape(note_content)}</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Copy option rows — tag above box, directly editable in place, no star
+            rerun_sel = False
+            for i, (opt_name, opt_sub) in enumerate(OPTS_META):
+                opt_text = options[i] if i < len(options) else ""
+                is_sel = (current_sel == opt_text)
+
+                _card_key = f"copyopt_sel_{unit['id']}_{i}" if is_sel else f"copyopt_{unit['id']}_{i}"
+                with st.container(border=True, key=_card_key):
+                    st.markdown(
+                        f'<div class="cr-label"><div class="cr-lname">{opt_name}</div>'
+                        f'<div class="cr-lsub">{opt_sub}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                    new_opt_text = st.text_area(
+                        opt_name, value=opt_text, key=f"opt_text_{unit['id']}_{i}",
+                        height=70, label_visibility="collapsed",
+                    )
+                    if new_opt_text != opt_text:
+                        was_selected = is_sel
+                        options[i] = new_opt_text
+                        st.session_state.copy_options[unit["id"]]["options"] = options
+                        if was_selected:
+                            for _gu in group:
+                                st.session_state.copy_selections[_gu["id"]] = new_opt_text
+                        st.rerun()
+                    if not is_sel:
+                        if st.button("이 버전 사용", key=f"use_opt_{unit['id']}_{i}", use_container_width=True):
+                            for _gu in group:
+                                st.session_state.copy_selections[_gu["id"]] = opt_text
+                            rerun_sel = True
+                    else:
+                        st.markdown(
+                            '<div style="text-align:center;font-size:12px;font-weight:600;'
+                            'color:#fff;padding:7px 0 0;">✓ 선택됨</div>',
+                            unsafe_allow_html=True,
+                        )
+
+            if rerun_sel:
+                st.rerun()
+
+            # Recommendation box
+            if recommendation:
+                st.markdown(
+                    f'<div class="recbox"><div style="font-size:18px;flex-shrink:0;">📌</div>'
+                    f'<div><strong>추천 이유:</strong> {_html.escape(recommendation)}</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+            if st.button("선택된 카피 문법 체크", key=f"grammar_{unit['id']}"):
+                with st.spinner("문법 체크 중..."):
+                    try:
+                        feedback = check_copy_grammar(unit["ko_text"], current_sel, _build_context())
+                        st.session_state.copy_grammar_results[unit["id"]] = feedback
+                    except Exception as e:
+                        st.session_state.copy_grammar_results[unit["id"]] = f"오류: {e}"
+                st.rerun()
+            grammar_feedback = st.session_state.copy_grammar_results.get(unit["id"], "")
+            if grammar_feedback:
+                st.markdown(
+                    f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+                    f'padding:10px 14px;font-size:13px;color:#166534;line-height:1.6;margin-top:8px;">'
+                    f'✅ {_html.escape(grammar_feedback)}</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # AI chat section
+            st.markdown(
+                '<div style="margin-top:10px;border-top:1px solid var(--cb);padding-top:10px;">'
+                '<div style="font-size:12.5px;color:var(--cm);font-weight:500;margin-bottom:6px;">AI 수정 요청</div>',
+                unsafe_allow_html=True,
+            )
+            _chat_col, _chat_btn = st.columns([5, 1])
+            with _chat_col:
+                user_msg = st.text_input(
+                    "AI 수정 요청",
+                    key=f"chat_2b_{idx}",
+                    placeholder=f"수정 요청 내용을 입력하세요 ({idx+1}/{total})",
+                    label_visibility="collapsed",
+                )
+            with _chat_btn:
+                _send = st.button("전송", key=f"send_2b_{idx}", use_container_width=True, type="primary")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        if _send and user_msg.strip():
+            with st.spinner("카피 수정 중..."):
                 try:
-                    feedback = check_copy_grammar(unit["ko_text"], current_sel, _build_context())
-                    st.session_state.copy_grammar_results[unit["id"]] = feedback
+                    refined = chat_refine_copy(unit["ko_text"], current_sel, user_msg.strip(), _build_context())
+                    for _gu in group:
+                        st.session_state.copy_selections[_gu["id"]] = refined
                 except Exception as e:
-                    st.session_state.copy_grammar_results[unit["id"]] = f"오류: {e}"
+                    st.error(f"오류: {e}")
             st.rerun()
-        grammar_feedback = st.session_state.copy_grammar_results.get(unit["id"], "")
-        if grammar_feedback:
+
+        # ── Navigation: prev/next copy ──────────────────────────────────────────
+        c_prev, c_counter, c_next_btn = st.columns([1, 1.5, 1])
+        with c_prev:
+            if st.button("＜", key="2b_prev", disabled=(idx == 0), use_container_width=True):
+                st.session_state.current_copy_idx -= 1
+                st.rerun()
+        with c_next_btn:
+            if st.button("＞", key="2b_next", disabled=(idx >= total - 1), use_container_width=True):
+                st.session_state.current_copy_idx += 1
+                st.rerun()
+        with c_counter:
             st.markdown(
-                f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
-                f'padding:10px 14px;font-size:13px;color:#166534;line-height:1.6;margin-top:8px;">'
-                f'✅ {_html.escape(grammar_feedback)}</div>',
+                f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
+                f'color:var(--cm);font-weight:500;">{idx+1}/{total} 카피</div>',
                 unsafe_allow_html=True,
             )
 
-        # AI chat section
-        st.markdown(
-            '<div style="margin-top:10px;border-top:1px solid var(--cb);padding-top:10px;">'
-            '<div style="font-size:12.5px;color:var(--cm);font-weight:500;margin-bottom:6px;">AI 수정 요청</div>',
-            unsafe_allow_html=True,
-        )
-        _chat_col, _chat_btn = st.columns([5, 1])
-        with _chat_col:
-            user_msg = st.text_input(
-                "AI 수정 요청",
-                key=f"chat_2b_{idx}",
-                placeholder=f"수정 요청 내용을 입력하세요 ({idx+1}/{total})",
-                label_visibility="collapsed",
-            )
-        with _chat_btn:
-            _send = st.button("전송", key=f"send_2b_{idx}", use_container_width=True, type="primary")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    if _send and user_msg.strip():
-        with st.spinner("카피 수정 중..."):
-            try:
-                refined = chat_refine_copy(unit["ko_text"], current_sel, user_msg.strip(), _build_context())
-                for _gu in group:
-                    st.session_state.copy_selections[_gu["id"]] = refined
-            except Exception as e:
-                st.error(f"오류: {e}")
-        st.rerun()
-
-    # ── Navigation: prev/next copy ──────────────────────────────────────────
-    c_prev, c_counter, c_next_btn = st.columns([1, 1.5, 1])
-    with c_prev:
-        if st.button("＜", key="2b_prev", disabled=(idx == 0), use_container_width=True):
-            st.session_state.current_copy_idx -= 1
-            st.rerun()
-    with c_next_btn:
-        if st.button("＞", key="2b_next", disabled=(idx >= total - 1), use_container_width=True):
-            st.session_state.current_copy_idx += 1
-            st.rerun()
-    with c_counter:
-        st.markdown(
-            f'<div style="display:flex;align-items:center;height:38px;font-size:14px;'
-            f'color:var(--cm);font-weight:500;">{idx+1}/{total} 카피</div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Navigation: stage back/forward ──────────────────────────────────────
-    c_2b_back, c_2b_fwd = st.columns([1, 2])
-    with c_2b_back:
-        if st.button("← 발표용 감수로", key="2b_back", use_container_width=True):
-            _back_stage = "review_2a" if st.session_state.presentation_units else "classify"
-            st.session_state.stage = _back_stage
-            st.rerun()
-    with c_2b_fwd:
-        if st.button("다음 단계: 다운로드 →", key="2b_done", type="primary", use_container_width=True):
-            st.session_state.stage = "download"
-            st.rerun()
+        # ── Navigation: stage back/forward ──────────────────────────────────────
+        c_2b_back, c_2b_fwd = st.columns([1, 2])
+        with c_2b_back:
+            if st.button("← 발표용 감수로", key="2b_back", use_container_width=True):
+                _back_stage = "review_2a" if st.session_state.presentation_units else "classify"
+                st.session_state.stage = _back_stage
+                st.rerun()
+        with c_2b_fwd:
+            if st.button("다음 단계: 다운로드 →", key="2b_done", type="primary", use_container_width=True):
+                st.session_state.stage = "download"
+                st.rerun()
 
 
 # ── Stage: en_ko (영→한 번역) ─────────────────────────────────────────────────
