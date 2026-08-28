@@ -228,6 +228,12 @@ div.stButton > button[kind="primary"]:hover,
 div.stDownloadButton > button[kind="primary"]:hover {
   background: var(--cpa) !important; border-color: var(--cpa) !important;
 }
+div.stButton > button:disabled,
+div.stButton > button[kind="primary"]:disabled,
+div.stDownloadButton > button:disabled {
+  background: var(--cbg) !important; border-color: var(--cb) !important;
+  color: var(--ct3) !important; opacity: 1 !important; cursor: default !important;
+}
 
 /* ── Input fields ── */
 .stTextInput > div > div > input,
@@ -364,6 +370,40 @@ div.stDownloadButton > button[kind="primary"]:hover {
 [class*="st-key-review_2b_wrap"] {
   max-width: 1200px !important; margin: 0 auto !important; padding: 0 40px !important;
 }
+
+/* ── Classify page: top nav row (back | description | forward), centered ── */
+[class*="st-key-classify_navrow"] {
+  max-width: 1200px !important; margin: 0 auto !important;
+  padding: 11px 40px !important; border-bottom: 1px solid var(--cbf) !important;
+  margin-bottom: 14px !important;
+}
+
+/* ── Classify item merge states: shared pale block, seam edges squared off ── */
+[class*="st-key-item_mtop_"] {
+  background: var(--cbl) !important; border: none !important; box-shadow: none !important;
+  border-radius: 8px 8px 0 0 !important; padding: 11px 13px !important; margin-bottom: 0 !important;
+}
+[class*="st-key-item_mmid_"] {
+  background: var(--cbl) !important; border: none !important; box-shadow: none !important;
+  border-radius: 0 !important; padding: 11px 13px !important; margin-bottom: 0 !important;
+}
+[class*="st-key-item_mbot_"] {
+  background: var(--cbl) !important; border: none !important; box-shadow: none !important;
+  border-radius: 0 0 8px 8px !important; padding: 11px 13px !important; margin-bottom: 8px !important;
+}
+
+/* ── Separator between classify items: dashed line + circular toggle ── */
+.sep-line-half { height: 0; border-top: 1px dashed var(--cb); margin-top: 11px; }
+.sep-line-half.faint { border-top-color: var(--cbl); opacity: .7; }
+[class*="st-key-sepbtn_"] button {
+  border-radius: 50% !important; width: 22px !important; height: 22px !important;
+  min-height: 22px !important; padding: 0 !important; font-size: 10px !important;
+  font-weight: 700 !important; line-height: 1 !important;
+}
+[class*="st-key-sepbtn_merged_"] button {
+  background: var(--cbl) !important; color: var(--cp) !important;
+  border-style: dashed !important; border-color: rgba(12,39,144,.3) !important;
+}
 </style>""", unsafe_allow_html=True)
 
 
@@ -402,6 +442,10 @@ def _init():
         "en_ko_loaded": False,
         "copy_grammar_results": {},
         "excluded_unit_ids": [],
+        "fetched_url": "",
+        "fetched_file_bytes": None,
+        "fetched_file_type": "pptx",
+        "merged_seps": {},  # slide_idx -> set of positions merged with the next item
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -536,6 +580,33 @@ def _build_context() -> str:
     return "\n\n".join(parts)
 
 
+def _materialize_merges(units: list[dict], merged_seps: dict) -> list[dict]:
+    """Combine consecutive items joined via the classify page's merge toggle into
+    one translatable unit each, without mutating the reversible classify state."""
+    by_slide = defaultdict(list)
+    for u in units:
+        by_slide[u["slide_idx"]].append(u)
+    result = []
+    for slide_idx, items in by_slide.items():
+        seps = merged_seps.get(slide_idx, set())
+        n = len(items)
+        pos = 0
+        while pos < n:
+            run = [items[pos]]
+            while pos in seps and pos + 1 < n:
+                pos += 1
+                run.append(items[pos])
+            if len(run) == 1:
+                result.append(run[0])
+            else:
+                merged_unit = dict(run[0])
+                merged_unit["ko_text"] = " ".join(r["ko_text"] for r in run)
+                merged_unit["shape_text"] = merged_unit["ko_text"]
+                result.append(merged_unit)
+            pos += 1
+    return result
+
+
 def _slide_img_html(slide_idx: int) -> str:
     imgs = st.session_state.slide_images
     if imgs and slide_idx < len(imgs):
@@ -559,9 +630,9 @@ def _thumb_html(slide_idx: int, active: bool) -> str:
 
 # ── Chrome: top bar + step rail ───────────────────────────────────────────────
 STAGES_KO_EN = ["upload", "classify", "review_2a", "review_2b", "download"]
-LABELS_KO_EN = ["업로드", "분류", "발표용 감수", "카피 선택", "다운로드"]
+LABELS_KO_EN = ["파일 업로드", "슬라이드 분류", "발표용 감수", "카피 선택", "다운로드"]
 STAGES_EN_KO = ["upload", "en_ko", "download"]
-LABELS_EN_KO = ["업로드", "번역", "다운로드"]
+LABELS_EN_KO = ["파일 업로드", "번역", "다운로드"]
 
 def _current_stages() -> tuple[list, list]:
     if st.session_state.direction == "en_ko":
@@ -601,181 +672,117 @@ _render_chrome()
 if st.session_state.stage == "upload":
     st.markdown('<div class="page">', unsafe_allow_html=True)
 
-    # Direction selector — two large clickable cards (matches approved mockup)
-    st.markdown('<div class="section-eyebrow">번역 방향</div>', unsafe_allow_html=True)
+    # ── 소제목 1: 번역 선택 ──────────────────────────────────────────────────
+    st.markdown('<div class="section-eyebrow">번역 선택</div>', unsafe_allow_html=True)
     _dir_col1, _dir_col2 = st.columns(2)
     with _dir_col1:
-        _sel = st.session_state.direction == "ko_en"
-        st.markdown(
-            f'<div class="dir-card{" selected" if _sel else ""}">'
-            f'<span class="dir-arrow">🇰🇷 → 🇺🇸</span>'
-            f'<div class="dir-title">한국어 → 영어</div>'
-            f'<div class="dir-sub">Korean to English</div></div>',
-            unsafe_allow_html=True,
-        )
-        if _sel:
-            st.markdown('<div class="dir-picked">✓ 선택됨</div>', unsafe_allow_html=True)
-        elif st.button("이 방향 선택", key="dir_pick_ko_en", use_container_width=True):
-            st.session_state.direction = "ko_en"
-            st.rerun()
+        if st.button("한국어 → 영어", key="dir_ko_en", use_container_width=True,
+                     type="primary" if st.session_state.direction == "ko_en" else "secondary"):
+            if st.session_state.direction != "ko_en":
+                st.session_state.direction = "ko_en"
+                st.rerun()
     with _dir_col2:
-        _sel = st.session_state.direction == "en_ko"
-        st.markdown(
-            f'<div class="dir-card{" selected" if _sel else ""}">'
-            f'<span class="dir-arrow">🇺🇸 → 🇰🇷</span>'
-            f'<div class="dir-title">영어 → 한국어</div>'
-            f'<div class="dir-sub">English to Korean</div></div>',
-            unsafe_allow_html=True,
-        )
-        if _sel:
-            st.markdown('<div class="dir-picked">✓ 선택됨</div>', unsafe_allow_html=True)
-        elif st.button("이 방향 선택", key="dir_pick_en_ko", use_container_width=True):
-            st.session_state.direction = "en_ko"
-            st.rerun()
+        if st.button("영어 → 한국어", key="dir_en_ko", use_container_width=True,
+                     type="primary" if st.session_state.direction == "en_ko" else "secondary"):
+            if st.session_state.direction != "en_ko":
+                st.session_state.direction = "en_ko"
+                st.rerun()
 
     _is_en_ko = st.session_state.direction == "en_ko"
 
-    if _is_en_ko:
-        st.markdown('<div class="page-title">영어 문서 업로드</div>', unsafe_allow_html=True)
-        st.markdown('<div class="page-sub">번역할 영어 PPTX 또는 Word(.docx) 파일의 Google Drive 링크를 입력하세요.</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="page-title">PPT 파일 업로드 및 캠페인 브리프</div>', unsafe_allow_html=True)
-        st.markdown('<div class="page-sub">번역할 한국어 PPTX 파일과 캠페인 정보를 입력하세요.</div>', unsafe_allow_html=True)
-
-    # Card 1: file
-    _file_card_title = "영어 파일 (PPTX / Word)" if _is_en_ko else "한국어 PPTX 파일"
-    _file_placeholder = "https://drive.google.com/file/d/...  또는  https://docs.google.com/document/d/..."
+    # ── 소제목 2: 번역할 PPT 파일 업로드 하기 ──────────────────────────────────
     with st.container(border=True, key="card_file"):
-        st.markdown(f'<div class="card-title">{_file_card_title}</div>', unsafe_allow_html=True)
-        st.markdown('<div class="field-label">☁ Google Drive / Google Docs 링크</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-title">번역할 PPT 파일 업로드 하기</div>', unsafe_allow_html=True)
         c1, c2 = st.columns([5, 1])
         with c1:
             drive_url = st.text_input(
-                "drive_url", placeholder=_file_placeholder,
+                "drive_url", placeholder="https://drive.google.com/file/d/...",
                 label_visibility="collapsed", key="up_drive_url",
             )
+        _url_stripped = drive_url.strip()
+        _already_fetched = bool(_url_stripped) and _url_stripped == st.session_state.fetched_url
         with c2:
-            fetch_clicked = st.button("가져오기", key="btn_fetch_main", use_container_width=True, type="primary")
-        if drive_url.strip() and not _gdrive_file_id(drive_url.strip()):
+            fetch_clicked = st.button(
+                "가져오기", key="btn_fetch_main", use_container_width=True,
+                type="secondary" if _already_fetched else "primary",
+                disabled=_already_fetched or not _url_stripped,
+            )
+        st.markdown(
+            '<div style="font-size:11.5px;color:var(--cm);margin-top:8px;line-height:1.7;">'
+            '무료버전에서는 Google Drive만 가능합니다<br>'
+            '링크 공유 시 권한을 편집자(edit)로 해야 합니다</div>',
+            unsafe_allow_html=True,
+        )
+        if _url_stripped and not _gdrive_file_id(_url_stripped):
             st.warning("올바른 Google Drive / Google Docs 링크가 아닙니다.")
 
-    # Card 2: Translation quality info (brand name + term mapping, grouped as one section)
-    if _is_en_ko:
-        _kp_title = "주요 용어 매핑 (영어 → 한국어)"
-        _kp_sub = "자주 쓰이는 영어 표현의 선호 한국어 번역을 지정합니다."
-        _kp_col1, _kp_col2 = "영어", "한국어"
-        _kp_label1, _kp_label2 = "영어 표현", "한국어 번역 (선호)"
-        _kp_init = st.session_state.key_phrases if st.session_state.key_phrases else [{"영어": "", "한국어": ""}]
-    else:
-        _kp_title = "주요 용어 매핑 (한국어 → 영어)"
-        _kp_sub = "자주 쓰는 표현의 선호 번역을 지정합니다. 행 추가 버튼으로 한 줄을 추가하세요."
-        _kp_col1, _kp_col2 = "한국어", "영어"
-        _kp_label1, _kp_label2 = "한국어 표현", "영어 번역 (선호)"
-        _kp_init = st.session_state.key_phrases if st.session_state.key_phrases else [{"한국어": "", "영어": ""}]
-    with st.container(border=True, key="card_quality"):
-        st.markdown(
-            '<div class="card-title">번역 품질 향상 정보 <span style="font-weight:400;opacity:.7;">(선택)</span></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('<div class="field-label" style="margin-top:4px;">브랜드명</div>', unsafe_allow_html=True)
-        c_ko, c_en = st.columns(2)
-        with c_ko:
-            brand_ko = st.text_input("brand_ko", placeholder="브랜드명 (한국어) — 예: 삼성전자",
-                value=st.session_state.brand_name_ko, label_visibility="collapsed")
-        with c_en:
-            brand_en = st.text_input("brand_en", placeholder="Brand name (EN) — e.g. Samsung Electronics",
-                value=st.session_state.brand_name_en, label_visibility="collapsed")
-
-        st.markdown(f'<div class="field-label" style="margin-top:14px;">{_kp_title}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="card-sub">{_kp_sub}</div>', unsafe_allow_html=True)
-        edited_kp = st.data_editor(
-            pd.DataFrame(_kp_init),
-            column_config={
-                _kp_col1: st.column_config.TextColumn(_kp_label1, width="large"),
-                _kp_col2: st.column_config.TextColumn(_kp_label2, width="large"),
-            },
-            num_rows="dynamic", hide_index=True, use_container_width=True, key="kp_editor",
-        )
-
-    # Cards only shown for ko→en
-    ref_drive_url = ""
-    font_file = None
-    if not _is_en_ko:
-        # Card 4: Reference PPTX (optional)
-        with st.container(border=True, key="card_ref"):
-            st.markdown(
-                '<div class="card-title">이전 번역본 참고 (선택)</div>'
-                '<div class="card-sub">기존 영문 PPT를 올리면 용어·문체를 참고해 일관성을 유지합니다.</div>'
-                '<div class="field-label">영문 참고 PPTX 링크 (선택)</div>',
-                unsafe_allow_html=True,
-            )
-            c3, c4 = st.columns([5, 1])
-            with c3:
-                ref_drive_url = st.text_input(
-                    "ref_url", placeholder="https://drive.google.com/file/d/...",
-                    label_visibility="collapsed", key="up_ref_url",
+        if fetch_clicked and _url_stripped and _gdrive_file_id(_url_stripped):
+            fid = _gdrive_file_id(_url_stripped)
+            _is_slides = _gdrive_is_slides(_url_stripped)
+            _is_docs = _gdrive_is_docs(_url_stripped)
+            with st.spinner("Google Drive에서 파일 다운로드 중..."):
+                try:
+                    _fetched_bytes = _download_gdrive(fid, is_slides=_is_slides, is_docs=_is_docs)
+                except Exception as e:
+                    st.error(f"다운로드 실패: {e}")
+                    st.stop()
+            if not _is_zip(_fetched_bytes):
+                st.error(
+                    "파일을 올바르게 다운로드하지 못했습니다. "
+                    "Google Drive 파일 공유 설정을 확인해 주세요:\n\n"
+                    "1. Google Drive에서 파일 우클릭 → 공유\n"
+                    "2. '링크가 있는 모든 사용자' 또는 '편집자'로 설정\n"
+                    "3. 링크 복사 후 다시 시도"
                 )
-            with c4:
-                st.button("가져오기", key="btn_fetch_ref", use_container_width=True)
-
-        # Card 5: Font (optional)
-        with st.container(border=True, key="card_font"):
-            st.markdown(
-                '<div class="card-title">영어 폰트 (선택)</div>'
-                '<div class="card-sub">번역된 텍스트에 적용할 TTF/OTF 폰트 파일을 업로드하세요.</div>',
-                unsafe_allow_html=True,
+                st.stop()
+            st.session_state.fetched_url = _url_stripped
+            st.session_state.fetched_file_bytes = _fetched_bytes
+            st.session_state.fetched_file_type = (
+                "docx" if (_is_docs or _url_stripped.lower().endswith(".docx")) else "pptx"
             )
-            font_file = st.file_uploader("폰트 파일 (선택, TTF/OTF)", type=["ttf", "otf"], key="font_uploader",
-                                          label_visibility="collapsed")
-            if font_file:
-                st.caption(f"업로드: {font_file.name}")
+            st.rerun()
 
-    # Card 6: Proper nouns
-    _noun_sub = "번역하지 않고 그대로 쓸 브랜드명, 인명, 제품명 등을 쉼표로 구분해 입력하세요."
-    with st.container(border=True, key="card_glossary"):
+    # ── 소제목 3: 번역 퀄리티 상승을 위한 추가 정보 입력 ───────────────────────
+    with st.container(border=True, key="card_quality"):
+        st.markdown('<div class="card-title">번역 퀄리티 상승을 위한 추가 정보 입력</div>', unsafe_allow_html=True)
         st.markdown(
-            f'<div class="card-title">고유명사 / 번역하지 않을 단어</div>'
-            f'<div class="card-sub">{_noun_sub}</div>',
+            '<div class="card-sub">브랜드명, 제품명, 내부 약어, 선호 문구 등 주요 용어를 등록하시면 '
+            '이를 활용하여 번역하여 검수 업무가 줄어듭니다</div>',
             unsafe_allow_html=True,
         )
-        glossary = st.text_input(
-            "glossary", placeholder="예: ChatGPT, POSCO, K-Beauty",
-            value=st.session_state.glossary, label_visibility="collapsed",
-        )
+        if not st.session_state.key_phrases:
+            st.session_state.key_phrases = [{"한국어": "", "영어": ""}]
+        _col_order = [("영어", "English"), ("한국어", "한국어")] if _is_en_ko else [("한국어", "한국어"), ("영어", "English")]
+        for idx in range(len(st.session_state.key_phrases)):
+            c_a, c_b = st.columns(2)
+            for col, (lang_key, placeholder) in zip((c_a, c_b), _col_order):
+                with col:
+                    _val = st.text_input(
+                        f"term_{lang_key}_{idx}",
+                        value=st.session_state.key_phrases[idx].get(lang_key, ""),
+                        placeholder=placeholder, key=f"term_{lang_key}_{idx}",
+                        label_visibility="collapsed",
+                    )
+                    st.session_state.key_phrases[idx][lang_key] = _val
+        if st.button("+ 항목 추가", key="add_term_pair"):
+            st.session_state.key_phrases.append({"한국어": "", "영어": ""})
+            st.rerun()
 
-    # Footer nav
-    file_ready = bool(drive_url.strip() and _gdrive_file_id(drive_url.strip()))
-    _next_label = "다음 단계: 번역 →" if _is_en_ko else "다음 단계: 분류 →"
+    # ── 시작하기 ────────────────────────────────────────────────────────────
+    file_ready = (
+        st.session_state.fetched_file_bytes is not None
+        and st.session_state.fetched_url == drive_url.strip()
+    )
     _, col_next = st.columns([1, 1])
     with col_next:
-        go = st.button(_next_label, type="primary", disabled=not file_ready,
+        go = st.button("시작하기", type="primary", disabled=not file_ready,
                        use_container_width=True, key="btn_go")
 
     if go and file_ready:
-        _url = drive_url.strip()
+        file_bytes = st.session_state.fetched_file_bytes
+        _file_type = st.session_state.fetched_file_type
+        _url = st.session_state.fetched_url
         fid = _gdrive_file_id(_url)
-        _is_slides = _gdrive_is_slides(_url)
-        _is_docs = _gdrive_is_docs(_url)
-        with st.spinner("Google Drive에서 파일 다운로드 중..."):
-            try:
-                file_bytes = _download_gdrive(fid, is_slides=_is_slides, is_docs=_is_docs)
-            except Exception as e:
-                st.error(f"다운로드 실패: {e}")
-                st.stop()
-
-        # Validate file is actually a ZIP (PPTX/DOCX are ZIP-based)
-        if not _is_zip(file_bytes):
-            st.error(
-                "파일을 올바르게 다운로드하지 못했습니다. "
-                "Google Drive 파일 공유 설정을 확인해 주세요:\n\n"
-                "1. Google Drive에서 파일 우클릭 → 공유\n"
-                "2. '링크가 있는 모든 사용자' 또는 '뷰어'로 설정\n"
-                "3. 링크 복사 후 다시 시도"
-            )
-            st.stop()
-
-        # Detect file type from URL or content header
-        _file_type = "docx" if (_is_docs or _url.lower().endswith(".docx")) else "pptx"
 
         with st.spinner("텍스트 파싱 중..."):
             if _file_type == "docx":
@@ -795,47 +802,10 @@ if st.session_state.stage == "upload":
             from pptx import Presentation as _Prs
             slide_count = len(_Prs(io.BytesIO(file_bytes)).slides)
 
-        st.session_state.brand_name_ko = brand_ko
-        st.session_state.brand_name_en = brand_en
-        st.session_state.key_phrases = edited_kp.to_dict("records")
-        st.session_state.glossary = glossary
         st.session_state.file_type = _file_type
-
-        if ref_drive_url.strip():
-            rfid = _gdrive_file_id(ref_drive_url.strip())
-            if rfid:
-                with st.spinner("참고 번역본 다운로드 중..."):
-                    try:
-                        ref_bytes = _download_gdrive(rfid)
-                        st.session_state.ref_pptx_texts = extract_reference_texts(ref_bytes)
-                    except Exception:
-                        st.session_state.ref_pptx_texts = []
-            else:
-                st.session_state.ref_pptx_texts = []
-        else:
-            st.session_state.ref_pptx_texts = []
-
-        if font_file is not None:
-            try:
-                from fontTools import ttLib
-                tt = ttLib.TTFont(io.BytesIO(font_file.read()))
-                fname = ""
-                for record in tt["name"].names:
-                    if record.nameID == 1:
-                        try:
-                            fname = record.toUnicode(); break
-                        except Exception:
-                            pass
-                st.session_state.font_name = fname
-            except Exception:
-                st.session_state.font_name = ""
-        else:
-            st.session_state.font_name = ""
-
         st.session_state.file_bytes = file_bytes
         _suffix = "KO" if _is_en_ko else "EN"
-        _ext = _file_type
-        st.session_state.file_name = f"gdrive_{fid[:8]}_{_suffix}.{_ext}"
+        st.session_state.file_name = f"gdrive_{fid[:8]}_{_suffix}.{_file_type}"
         st.session_state.slide_count = slide_count
         st.session_state.text_units = text_units
         st.session_state.slide_images = slide_imgs
@@ -884,14 +854,40 @@ elif st.session_state.stage == "classify":
     for i, u in enumerate(units):
         slide_groups[u["slide_idx"]].append((i, u))
 
-    # Page header
-    st.markdown(
-        '<div style="padding:28px 32px 16px;">'
-        '<div class="page-title">슬라이드 분류</div>'
-        '<div class="page-sub">감지된 텍스트 영역이 발표용 멘트인지 카피인지 확인하고, 태그를 클릭해 분류를 수정하세요.</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    # Top nav row: back | description | forward
+    with st.container(key="classify_navrow"):
+        nc1, nc2, nc3 = st.columns([1, 3, 1])
+        with nc1:
+            if st.button("← 업로드로 돌아가기", key="cl_back", use_container_width=True):
+                st.session_state.stage = "upload"
+                st.rerun()
+        with nc2:
+            st.markdown(
+                '<div style="text-align:center;font-size:12.5px;color:var(--cm);padding-top:9px;">'
+                'Copywriter가 번역해야할 카피와 아닌 발표용을 구분할 수 있습니다</div>',
+                unsafe_allow_html=True,
+            )
+        with nc3:
+            if st.button("발표용 감수로 넘어가기 →", key="cl_next", type="primary", use_container_width=True):
+                merged_units = _materialize_merges(st.session_state.classified_units, st.session_state.merged_seps)
+                _excl_ids = set(st.session_state.excluded_unit_ids)
+                pres = [u for u in merged_units if u["category"] == "presentation" and u["id"] not in _excl_ids]
+                copy = [u for u in merged_units if u["category"] == "copy" and u["id"] not in _excl_ids]
+                st.session_state.presentation_units = pres
+                st.session_state.copy_units = copy
+                st.session_state.translations_loaded = False
+                st.session_state.copy_options_loaded = False
+                st.session_state.current_pres_idx = 0
+                st.session_state.current_copy_idx = 0
+                st.session_state.copy_selections = {}
+                if pres:
+                    st.session_state.stage = "review_2a"
+                elif copy:
+                    st.session_state.stage = "review_2b"
+                else:
+                    st.error("분류된 텍스트가 없습니다.")
+                    st.stop()
+                st.rerun()
 
     rerun_needed = False
     col_left, col_center, col_right = st.columns([1.4, 4, 2])
@@ -920,18 +916,9 @@ elif st.session_state.stage == "classify":
             unsafe_allow_html=True,
         )
 
-    # Right: legend + current slide text units (independently scrollable); nav buttons below
+    # Right: current slide text units (independently scrollable); nav buttons below
     with col_right:
         with st.container(height=650):
-            st.markdown(
-                '<div class="card">'
-                '<div class="card-title" style="margin-bottom:14px;">분류 범례</div>'
-                '<div class="legend-row"><div class="dot-y"></div>발표용 — 구두 발표 멘트</div>'
-                '<div class="legend-row"><div class="dot-b"></div>카피 — 광고카피</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-
             slide_items = slide_groups.get(active_slide, [])
             with st.container(border=True, key=f"card_slide_items_{active_slide}"):
                 st.markdown(
@@ -956,14 +943,25 @@ elif st.session_state.stage == "classify":
                             st.rerun()
 
                     excluded_ids = set(st.session_state.excluded_unit_ids)
+                    merged_set = st.session_state.merged_seps.get(active_slide, set())
                     for pos, (i, u) in enumerate(slide_items):
                         cat = u["category"]
                         is_excluded = u["id"] in excluded_ids
                         short = u["ko_text"][:45] + ("…" if len(u["ko_text"]) > 45 else "")
                         has_next = pos + 1 < len(slide_items)
+                        merge_above = (pos - 1) in merged_set
+                        merge_below = pos in merged_set
+                        if merge_above and merge_below:
+                            _card_key = f"item_mmid_{u['id']}"
+                        elif merge_above:
+                            _card_key = f"item_mbot_{u['id']}"
+                        elif merge_below:
+                            _card_key = f"item_mtop_{u['id']}"
+                        else:
+                            _card_key = f"item_card_{u['id']}"
 
-                        with st.container(border=True, key=f"item_card_{u['id']}"):
-                            c_tag, c_text, c_merge, c_excl = st.columns([1, 3, 0.5, 0.5])
+                        with st.container(border=True, key=_card_key):
+                            c_tag, c_text, c_excl = st.columns([1, 3.5, 0.5])
                             with c_tag:
                                 if is_excluded:
                                     st.markdown(
@@ -987,18 +985,6 @@ elif st.session_state.stage == "classify":
                                     f"{_html.escape(short)}</p>",
                                     unsafe_allow_html=True,
                                 )
-                            with c_merge:
-                                if has_next and not is_excluded:
-                                    if st.button("↕", key=f"merge_{u['id']}", use_container_width=True,
-                                                 help="다음 항목과 합치기"):
-                                        j, _ = slide_items[pos + 1]
-                                        cu = st.session_state.classified_units[i]
-                                        cv = st.session_state.classified_units[j]
-                                        merged = cu["ko_text"] + " " + cv["ko_text"]
-                                        st.session_state.classified_units[i]["ko_text"] = merged
-                                        st.session_state.classified_units[i]["shape_text"] = merged
-                                        del st.session_state.classified_units[j]
-                                        rerun_needed = True
                             with c_excl:
                                 if is_excluded:
                                     if st.button("복원", key=f"excl_{u['id']}", use_container_width=True):
@@ -1008,6 +994,25 @@ elif st.session_state.stage == "classify":
                                     if st.button("✕", key=f"excl_{u['id']}", use_container_width=True):
                                         st.session_state.excluded_unit_ids.append(u["id"])
                                         rerun_needed = True
+
+                        if has_next:
+                            is_sep_merged = pos in merged_set
+                            _line_cls = "faint" if is_sep_merged else ""
+                            sc1, sc2, sc3 = st.columns([1, 0.16, 1])
+                            with sc1:
+                                st.markdown(f'<div class="sep-line-half {_line_cls}"></div>', unsafe_allow_html=True)
+                            with sc2:
+                                _sep_key = f"sepbtn_merged_{active_slide}_{pos}" if is_sep_merged else f"sepbtn_{active_slide}_{pos}"
+                                if st.button("○" if is_sep_merged else "✕", key=_sep_key,
+                                             help="합쳐진 항목 나누기" if is_sep_merged else "다음 항목과 합치기"):
+                                    ms = st.session_state.merged_seps.setdefault(active_slide, set())
+                                    if is_sep_merged:
+                                        ms.discard(pos)
+                                    else:
+                                        ms.add(pos)
+                                    rerun_needed = True
+                            with sc3:
+                                st.markdown(f'<div class="sep-line-half {_line_cls}"></div>', unsafe_allow_html=True)
 
             # Manual text addition
             with st.container(border=True, key=f"card_manual_add_{active_slide}"):
@@ -1044,37 +1049,9 @@ elif st.session_state.stage == "classify":
                             })
                             rerun_needed = True
 
-        # Nav buttons outside the scrollable container — always visible
+        # rerun outside the scrollable container so state updates take effect immediately
         if rerun_needed:
             st.rerun()
-
-        c_back, c_next = st.columns(2)
-        with c_back:
-            if st.button("← 이전", key="cl_back", use_container_width=True):
-                st.session_state.stage = "upload"
-                st.rerun()
-        with c_next:
-            if st.button("발표용 감수 →", key="cl_next", type="primary", use_container_width=True):
-                _excl_ids = set(st.session_state.excluded_unit_ids)
-                pres = [u for u in st.session_state.classified_units
-                        if u["category"] == "presentation" and u["id"] not in _excl_ids]
-                copy = [u for u in st.session_state.classified_units
-                        if u["category"] == "copy" and u["id"] not in _excl_ids]
-                st.session_state.presentation_units = pres
-                st.session_state.copy_units = copy
-                st.session_state.translations_loaded = False
-                st.session_state.copy_options_loaded = False
-                st.session_state.current_pres_idx = 0
-                st.session_state.current_copy_idx = 0
-                st.session_state.copy_selections = {}
-                if pres:
-                    st.session_state.stage = "review_2a"
-                elif copy:
-                    st.session_state.stage = "review_2b"
-                else:
-                    st.error("분류된 텍스트가 없습니다.")
-                    st.stop()
-                st.rerun()
 
 
 # ── Stage: review_2a ──────────────────────────────────────────────────────────
