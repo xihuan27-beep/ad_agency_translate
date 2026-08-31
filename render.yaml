@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: agency-deck-translator-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
