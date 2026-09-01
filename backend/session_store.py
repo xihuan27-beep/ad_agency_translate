@@ -22,7 +22,7 @@ class Session:
         self.created_at = time.time()
         self.last_used = time.time()
         self.file_bytes: bytes | None = None
-        self.file_type: str = "pptx"  # "pptx" | "docx"
+        self.file_type: str = "pptx"  # "pptx" | "docx" | "pdf"
         self.file_name: str = "translated.pptx"
         self.text_units: list[dict] = []
         self.slide_images: list[bytes] = []

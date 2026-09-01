@@ -119,7 +119,7 @@ export default function UploadStage() {
           </button>
         </div>
         <div style={{ fontSize: 11.5, color: "var(--cm)", marginTop: 8, lineHeight: 1.7 }}>
-          무료버전에서는 Google Drive만 가능합니다
+          무료버전에서는 Google Drive만 가능합니다 (PPT, Word, PDF 지원)
           <br />
           링크 공유 시 권한을 편집자(edit)로 해야 합니다
         </div>

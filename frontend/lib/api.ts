@@ -1,4 +1,4 @@
-import type { ClassifiedUnit, CopyOptionSet, KeyPhrasePair, PresentationTranslation, TextUnit } from "./types";
+import type { ClassifiedUnit, CopyOptionSet, FileType, KeyPhrasePair, PresentationTranslation, TextUnit } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -36,7 +36,7 @@ export async function createSession(): Promise<string> {
 }
 
 export interface FetchResult {
-  fileType: "pptx" | "docx";
+  fileType: FileType;
   slideCount: number;
   hasSlideImages: boolean;
   textUnits: TextUnit[];

@@ -30,6 +30,14 @@ def is_zip(data: bytes) -> bool:
     return len(data) >= 4 and data[:4] == b"PK\x03\x04"
 
 
+def is_pdf(data: bytes) -> bool:
+    return len(data) >= 5 and data[:5] == b"%PDF-"
+
+
+def is_downloadable_file(data: bytes) -> bool:
+    return is_zip(data) or is_pdf(data)
+
+
 def _gdrive_confirm_url(html_text: str, file_id: str) -> str | None:
     """Extract confirmed download URL from Google's virus-scan warning page."""
     m = re.search(r"confirm=([0-9A-Za-z_-]+)", html_text)
@@ -66,14 +74,14 @@ def download_gdrive(file_id: str, is_slides: bool = False, is_docs: bool = False
     url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&authuser=0&confirm=t"
     try:
         resp = session.get(url, timeout=300)
-        if resp.status_code == 200 and is_zip(resp.content):
+        if resp.status_code == 200 and is_downloadable_file(resp.content):
             return resp.content
         # Google may return an HTML virus-scan confirmation page
         if resp.status_code == 200 and resp.content[:1] == b"<":
             confirm = _gdrive_confirm_url(resp.text, file_id)
             if confirm:
                 resp2 = session.get(confirm, timeout=300)
-                if resp2.status_code == 200 and is_zip(resp2.content):
+                if resp2.status_code == 200 and is_downloadable_file(resp2.content):
                     return resp2.content
         errors.append(f"usercontent: HTTP {resp.status_code}, size={len(resp.content)}")
     except Exception as e:
@@ -99,11 +107,11 @@ def download_gdrive(file_id: str, is_slides: bool = False, is_docs: bool = False
                 url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={value}"
                 resp = session.get(url, timeout=300)
                 break
-        if not is_zip(resp.content) and resp.content[:1] == b"<":
+        if not is_downloadable_file(resp.content) and resp.content[:1] == b"<":
             confirm = _gdrive_confirm_url(resp.text, file_id)
             if confirm:
                 resp = session.get(confirm, timeout=300)
-        if resp.status_code == 200 and is_zip(resp.content):
+        if resp.status_code == 200 and is_downloadable_file(resp.content):
             return resp.content
         errors.append(f"legacy uc: HTTP {resp.status_code}, size={len(resp.content)}")
     except Exception as e:

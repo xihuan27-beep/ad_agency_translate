@@ -43,7 +43,8 @@ export default function DownloadStage() {
     ? `영어 원문 ${textUnits.length}개 항목 → 한국어 번역 ${Object.values(enKoTranslations).filter((v) => v.trim()).length}개 완료`
     : `발표용 텍스트 ${presentationUnits.length}개 번역 · 광고 카피 ${copyUnits.length}개 트랜스크리에이션 완료`;
 
-  const dlLabel = isEnKo ? `한국어 ${fileType === "docx" ? "Word" : "PPT"} 다운로드` : "영문 PPT 다운로드";
+  const outputFormatLabel = fileType === "pptx" ? "PPT" : "Word";
+  const dlLabel = isEnKo ? `한국어 ${outputFormatLabel} 다운로드` : `영문 ${outputFormatLabel} 다운로드`;
 
   function handleReset() {
     if (sessionId) reset();

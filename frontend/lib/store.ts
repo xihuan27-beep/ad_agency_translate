@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ClassifiedUnit, CopyOptionSet, Direction, KeyPhrasePair, PresentationTranslation, Stage, TextUnit } from "./types";
+import type { ClassifiedUnit, CopyOptionSet, Direction, FileType, KeyPhrasePair, PresentationTranslation, Stage, TextUnit } from "./types";
 
 interface AppState {
   sessionId: string | null;
@@ -8,7 +8,7 @@ interface AppState {
 
   // upload
   fetchedUrl: string;
-  fileType: "pptx" | "docx";
+  fileType: FileType;
   slideCount: number;
   hasSlideImages: boolean;
   keyPhrases: KeyPhrasePair[];
@@ -40,7 +40,7 @@ interface AppState {
   setDirection: (dir: Direction) => void;
   setFetchedUrl: (url: string) => void;
   setKeyPhrases: (kp: KeyPhrasePair[]) => void;
-  setUploadResult: (r: { fileType: "pptx" | "docx"; slideCount: number; hasSlideImages: boolean; textUnits: TextUnit[] }) => void;
+  setUploadResult: (r: { fileType: FileType; slideCount: number; hasSlideImages: boolean; textUnits: TextUnit[] }) => void;
   setClassifiedUnits: (units: ClassifiedUnit[]) => void;
   toggleCategory: (id: string) => void;
   setAllCategory: (slideIdx: number, category: "presentation" | "copy") => void;
@@ -70,7 +70,7 @@ const initialState = {
   stage: "upload" as Stage,
   direction: "ko_en" as Direction,
   fetchedUrl: "",
-  fileType: "pptx" as "pptx" | "docx",
+  fileType: "pptx" as FileType,
   slideCount: 0,
   hasSlideImages: false,
   keyPhrases: [{ 한국어: "", 영어: "" }] as KeyPhrasePair[],

@@ -1,5 +1,7 @@
 export type Direction = "ko_en" | "en_ko";
 
+export type FileType = "pptx" | "docx" | "pdf";
+
 export type Category = "presentation" | "copy";
 
 export interface TextUnit {

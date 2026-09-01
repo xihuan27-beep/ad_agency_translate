@@ -25,12 +25,17 @@ from pptx_utils import (  # noqa: E402
     render_slides_to_images,
 )
 from docx_utils import extract_text_from_docx, apply_translations_to_docx  # noqa: E402
+from pdf_utils import (  # noqa: E402
+    extract_text_from_pdf,
+    render_pdf_to_images,
+    build_translated_docx,
+    page_count as pdf_page_count,
+)
 
 from gdrive_utils import (  # noqa: E402
     gdrive_file_id,
     gdrive_is_slides,
     gdrive_is_docs,
-    is_zip,
     download_gdrive,
 )
 from context_utils import build_context  # noqa: E402
@@ -116,7 +121,11 @@ def fetch_file(session_id: str, body: FetchRequest):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"다운로드 실패: {e}")
 
-    if not is_zip(file_bytes):
+    if file_bytes[:4] == b"PK\x03\x04":
+        file_type = "docx" if (is_docs or url.lower().endswith(".docx")) else "pptx"
+    elif file_bytes[:5] == b"%PDF-":
+        file_type = "pdf"
+    else:
         raise HTTPException(
             status_code=422,
             detail=(
@@ -127,10 +136,10 @@ def fetch_file(session_id: str, body: FetchRequest):
             ),
         )
 
-    file_type = "docx" if (is_docs or url.lower().endswith(".docx")) else "pptx"
-
     if file_type == "docx":
         text_units = extract_text_from_docx(file_bytes)
+    elif file_type == "pdf":
+        text_units = extract_text_from_pdf(file_bytes)
     else:
         text_units = extract_text_units(file_bytes)
 
@@ -143,6 +152,9 @@ def fetch_file(session_id: str, body: FetchRequest):
         slide_images = render_slides_to_images(file_bytes)
         from pptx import Presentation as _Prs
         slide_count = len(_Prs(io.BytesIO(file_bytes)).slides)
+    elif file_type == "pdf":
+        slide_images = render_pdf_to_images(file_bytes)
+        slide_count = pdf_page_count(file_bytes)
 
     session.file_bytes = file_bytes
     session.file_type = file_type
@@ -242,6 +254,9 @@ def apply(session_id: str, body: ApplyRequest):
         if session.file_type == "docx":
             out = apply_translations_to_docx(session.file_bytes, body.translations)
             session.output_file_name = "translated.docx"
+        elif session.file_type == "pdf":
+            out = build_translated_docx(session.text_units, body.translations)
+            session.output_file_name = "translated.docx"
         else:
             out = apply_translations(session.file_bytes, body.translations, font_name=body.fontName)
             session.output_file_name = "translated.pptx"
@@ -258,7 +273,7 @@ def download(session_id: str):
         raise HTTPException(status_code=400, detail="아직 생성된 파일이 없습니다.")
     mime = (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        if session.file_type == "docx"
+        if session.file_type in ("docx", "pdf")
         else "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     )
     return StreamingResponse(
