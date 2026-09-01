@@ -156,7 +156,7 @@ def render_slides_to_images(file_bytes: bytes) -> list[bytes]:
         slide_prefix = os.path.join(tmpdir, "slide")
         try:
             subprocess.run(
-                ["pdftoppm", "-png", "-r", "150", pdf_path, slide_prefix],
+                ["pdftoppm", "-png", "-r", "100", pdf_path, slide_prefix],
                 check=True, capture_output=True, timeout=180,
             )
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
