@@ -2,6 +2,8 @@
 # can reach both backend/ and the shared ai_utils.py / pptx_utils.py / docx_utils.py.
 FROM python:3.11-slim
 
+ENV PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     poppler-utils \
