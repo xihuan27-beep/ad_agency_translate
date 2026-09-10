@@ -2,8 +2,6 @@
 # can reach both backend/ and the shared ai_utils.py / pptx_utils.py / docx_utils.py.
 FROM python:3.11-slim
 
-ENV PYTHONUNBUFFERED=1
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     poppler-utils \
@@ -13,6 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1
 
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
