@@ -21,7 +21,6 @@ export default function ReviewPresentationStage() {
   const currentPresIdx = useAppStore((s) => s.currentPresIdx);
   const setCurrentPresIdx = useAppStore((s) => s.setCurrentPresIdx);
   const setStage = useAppStore((s) => s.setStage);
-  const resetReviewProgress = useAppStore((s) => s.resetReviewProgress);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,7 +61,6 @@ export default function ReviewPresentationStage() {
 
   function goForward() {
     if (copyUnits.length) {
-      resetReviewProgress();
       setStage("review_2b");
     } else {
       setStage("download");

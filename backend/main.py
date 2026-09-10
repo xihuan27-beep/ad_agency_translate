@@ -250,22 +250,6 @@ def apply(session_id: str, body: ApplyRequest):
     session = _get_session_or_404(session_id)
     if session.file_bytes is None:
         raise HTTPException(status_code=400, detail="먼저 파일을 가져와야 합니다.")
-
-    expected_ids = {u["id"] for u in session.text_units}
-    received_ids = set(body.translations.keys())
-    matched = expected_ids & received_ids
-    print(
-        f"[APPLY] session={session_id} file_type={session.file_type} "
-        f"expected_ids={len(expected_ids)} received_ids={len(received_ids)} matched={len(matched)}",
-        file=sys.stderr,
-    )
-    if len(matched) < len(received_ids):
-        only_received = list(received_ids - expected_ids)[:5]
-        print(f"[APPLY] sample ids in request but NOT in session.text_units: {only_received}", file=sys.stderr)
-    if len(matched) < len(expected_ids):
-        only_expected = list(expected_ids - received_ids)[:5]
-        print(f"[APPLY] sample ids in session.text_units but NOT in request: {only_expected}", file=sys.stderr)
-
     try:
         if session.file_type == "docx":
             out = apply_translations_to_docx(session.file_bytes, body.translations)
