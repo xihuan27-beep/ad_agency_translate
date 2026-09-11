@@ -2,7 +2,7 @@ import io
 import os
 import sys
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -127,9 +127,27 @@ def _get_session_or_404(session_id: str):
     return session
 
 
+def _render_images_bg(session_id: str, file_bytes: bytes, file_type: str):
+    """Background job: the slow LibreOffice/PDF rendering step, off the request path."""
+    session = store.get(session_id)
+    if session is None:
+        return
+    try:
+        if file_type == "pptx":
+            images = render_slides_to_images(file_bytes)
+        elif file_type == "pdf":
+            images = render_pdf_to_images(file_bytes)
+        else:
+            images = []
+        session.slide_images = images
+        session.slide_image_status = "ready" if images else "failed"
+    except Exception:
+        session.slide_image_status = "failed"
+
+
 # ── Upload / fetch ──────────────────────────────────────────────────────────
 @app.post("/api/sessions/{session_id}/fetch")
-def fetch_file(session_id: str, body: FetchRequest):
+def fetch_file(session_id: str, body: FetchRequest, background_tasks: BackgroundTasks):
     session = _get_session_or_404(session_id)
 
     url = body.url.strip()
@@ -169,29 +187,42 @@ def fetch_file(session_id: str, body: FetchRequest):
     if not text_units:
         raise HTTPException(status_code=422, detail="번역 가능한 텍스트를 찾지 못했습니다. 파일을 확인해 주세요.")
 
-    slide_images: list[bytes] = []
+    # Slide/page count is cheap to get synchronously (no LibreOffice involved).
+    # The actual image rendering is the slow part — defer it to a background
+    # task so the frontend can move on to classify/review immediately.
     slide_count = 0
     if file_type == "pptx":
-        slide_images = render_slides_to_images(file_bytes)
         from pptx import Presentation as _Prs
         slide_count = len(_Prs(io.BytesIO(file_bytes)).slides)
     elif file_type == "pdf":
-        slide_images = render_pdf_to_images(file_bytes)
         slide_count = pdf_page_count(file_bytes)
 
     session.file_bytes = file_bytes
     session.file_type = file_type
     session.file_name = f"gdrive_{fid[:8]}.{file_type}"
     session.text_units = text_units
-    session.slide_images = slide_images
+    session.slide_images = []
     session.slide_count = slide_count
+
+    if file_type in ("pptx", "pdf"):
+        session.slide_image_status = "pending"
+        background_tasks.add_task(_render_images_bg, session.id, file_bytes, file_type)
+    else:
+        session.slide_image_status = "none"
 
     return {
         "fileType": file_type,
         "slideCount": slide_count,
-        "hasSlideImages": len(slide_images) > 0,
+        "hasSlideImages": False,
+        "slideImageStatus": session.slide_image_status,
         "textUnits": text_units,
     }
+
+
+@app.get("/api/sessions/{session_id}/slide-image-status")
+def slide_image_status(session_id: str):
+    session = _get_session_or_404(session_id)
+    return {"status": session.slide_image_status, "count": len(session.slide_images)}
 
 
 @app.get("/api/sessions/{session_id}/slide-image/{idx}.png")

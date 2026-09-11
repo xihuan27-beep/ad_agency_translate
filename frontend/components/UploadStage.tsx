@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { ApiError, classify, fetchFile, translateEnToKo } from "@/lib/api";
+import { ApiError, classify, fetchFile, pollSlideImageStatus, translateEnToKo } from "@/lib/api";
 import ErrorNotice from "@/components/ErrorNotice";
 
 export default function UploadStage() {
@@ -12,6 +12,7 @@ export default function UploadStage() {
   const fetchedUrl = useAppStore((s) => s.fetchedUrl);
   const setFetchedUrl = useAppStore((s) => s.setFetchedUrl);
   const setUploadResult = useAppStore((s) => s.setUploadResult);
+  const setHasSlideImages = useAppStore((s) => s.setHasSlideImages);
   const keyPhrases = useAppStore((s) => s.keyPhrases);
   const setKeyPhrases = useAppStore((s) => s.setKeyPhrases);
   const textUnits = useAppStore((s) => s.textUnits);
@@ -37,6 +38,9 @@ export default function UploadStage() {
       const result = await fetchFile(sessionId, urlTrimmed);
       setUploadResult(result);
       setFetchedUrl(urlTrimmed);
+      if (result.slideImageStatus === "pending") {
+        pollSlideImageStatus(sessionId, () => setHasSlideImages(true));
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "다운로드 실패");
     } finally {

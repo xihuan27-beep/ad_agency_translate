@@ -35,10 +35,13 @@ export async function createSession(): Promise<string> {
   return data.sessionId;
 }
 
+export type SlideImageStatus = "none" | "pending" | "ready" | "failed";
+
 export interface FetchResult {
   fileType: FileType;
   slideCount: number;
   hasSlideImages: boolean;
+  slideImageStatus: SlideImageStatus;
   textUnits: TextUnit[];
 }
 
@@ -47,6 +50,40 @@ export async function fetchFile(sessionId: string, url: string): Promise<FetchRe
     method: "POST",
     body: JSON.stringify({ url }),
   });
+}
+
+export async function getSlideImageStatus(
+  sessionId: string
+): Promise<{ status: SlideImageStatus; count: number }> {
+  return request(`/api/sessions/${sessionId}/slide-image-status`);
+}
+
+/**
+ * Poll for background slide-image rendering to finish. Not tied to any
+ * component's lifecycle on purpose — image rendering keeps running (and this
+ * keeps polling) regardless of which wizard stage the user has navigated to,
+ * since the backend renders images in the background right after /fetch.
+ */
+export function pollSlideImageStatus(
+  sessionId: string,
+  onReady: () => void,
+  { intervalMs = 2000, timeoutMs = 5 * 60 * 1000 } = {}
+): void {
+  const start = Date.now();
+  const tick = async () => {
+    try {
+      const { status } = await getSlideImageStatus(sessionId);
+      if (status === "ready") {
+        onReady();
+        return;
+      }
+      if (status === "failed" || status === "none") return;
+    } catch {
+      // transient network error — keep trying until timeout
+    }
+    if (Date.now() - start < timeoutMs) setTimeout(tick, intervalMs);
+  };
+  setTimeout(tick, intervalMs);
 }
 
 export async function classify(

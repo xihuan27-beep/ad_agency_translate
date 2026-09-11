@@ -42,6 +42,7 @@ interface AppState {
   setFetchedUrl: (url: string) => void;
   setKeyPhrases: (kp: KeyPhrasePair[]) => void;
   setUploadResult: (r: { fileType: FileType; slideCount: number; hasSlideImages: boolean; textUnits: TextUnit[] }) => void;
+  setHasSlideImages: (v: boolean) => void;
   setClassifiedUnits: (units: ClassifiedUnit[]) => void;
   toggleCategory: (id: string) => void;
   setAllCategory: (slideIdx: number, category: "presentation" | "copy") => void;
@@ -109,6 +110,7 @@ export const useAppStore = create<AppState>((set) => ({
       hasSlideImages: r.hasSlideImages,
       textUnits: r.textUnits,
     }),
+  setHasSlideImages: (hasSlideImages) => set({ hasSlideImages }),
   setClassifiedUnits: (classifiedUnits) => set({ classifiedUnits }),
 
   toggleCategory: (id) =>

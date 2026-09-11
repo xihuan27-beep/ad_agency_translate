@@ -26,6 +26,7 @@ class Session:
         self.file_name: str = "translated.pptx"
         self.text_units: list[dict] = []
         self.slide_images: list[bytes] = []
+        self.slide_image_status: str = "none"  # "none" | "pending" | "ready" | "failed"
         self.slide_count: int = 0
         self.output_bytes: bytes | None = None
         self.output_file_name: str = "output.pptx"
