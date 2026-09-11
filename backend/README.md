@@ -17,3 +17,6 @@ Deployed via Docker using `./Dockerfile` (build context = repo root, since it ne
 Required environment variables:
 - `ANTHROPIC_API_KEY`
 - `FRONTEND_ORIGIN` — the deployed frontend's origin, for CORS (e.g. `https://your-app.vercel.app`)
+- `GMAIL_ADDRESS` — Gmail address used to send error-report emails (via SMTP)
+- `GMAIL_APP_PASSWORD` — a Gmail [App Password](https://myaccount.google.com/apppasswords) for that address (requires 2-Step Verification enabled on the account)
+- `NOTIFY_EMAIL` (optional) — where error reports are sent; defaults to `GMAIL_ADDRESS` itself

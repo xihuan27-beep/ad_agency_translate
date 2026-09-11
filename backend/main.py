@@ -40,6 +40,7 @@ from gdrive_utils import (  # noqa: E402
 )
 from context_utils import build_context  # noqa: E402
 from session_store import store  # noqa: E402
+from email_utils import send_error_report  # noqa: E402
 
 app = FastAPI(title="Agency Deck Translator API")
 
@@ -79,6 +80,11 @@ class GrammarCheckRequest(BaseModel):
     keyPhrases: list[dict] = []
 
 
+class ReportErrorRequest(BaseModel):
+    message: str
+    context: str = ""
+
+
 class ApplyRequest(BaseModel):
     translations: dict[str, str]
     fontName: str = ""
@@ -88,6 +94,16 @@ class ApplyRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ── Error reporting ──────────────────────────────────────────────────────
+@app.post("/api/report-error")
+def report_error(body: ReportErrorRequest):
+    try:
+        send_error_report(body.message, body.context)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"오류 신고 전송 실패: {e}")
+    return {"sent": True}
 
 
 # ── Session lifecycle ──────────────────────────────────────────────────────

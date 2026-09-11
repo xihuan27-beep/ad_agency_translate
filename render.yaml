@@ -11,3 +11,9 @@ services:
         sync: false
       - key: FRONTEND_ORIGIN
         sync: false
+      - key: GMAIL_ADDRESS
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: NOTIFY_EMAIL
+        sync: false

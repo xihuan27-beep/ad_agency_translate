@@ -321,3 +321,10 @@ button, input, textarea, select {
   background: #FFF4EC; border: 1px solid #FFCFA0; color: #B84500; border-radius: 8px;
   padding: 12px 14px; font-size: 13px; line-height: 1.6; margin-bottom: 14px; white-space: pre-line;
 }
+.error-report-btn {
+  margin-top: 8px; font-size: 12px; padding: 5px 10px; border-radius: 6px; font-family: inherit;
+  border: 1px solid #FFCFA0; background: #fff; color: #B84500; cursor: pointer;
+}
+.error-report-btn:hover { background: #FFE8D5; }
+.error-report-btn:disabled { opacity: .6; cursor: default; }
+.error-report-sent { margin-top: 8px; font-size: 12px; color: #B84500; }

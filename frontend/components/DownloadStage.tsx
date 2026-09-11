@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { ApiError, applyTranslations, downloadUrl } from "@/lib/api";
+import ErrorNotice from "@/components/ErrorNotice";
 
 export default function DownloadStage() {
   const sessionId = useAppStore((s) => s.sessionId);
@@ -57,7 +58,7 @@ export default function DownloadStage() {
       <div className="dl-title">번역 완료</div>
       <div className="dl-sub">{subtitle}</div>
 
-      {error && <div className="error-box">{error}</div>}
+      {error && <ErrorNotice message={error} context="다운로드 단계" />}
 
       <div className="dl-actions">
         {ready && sessionId ? (

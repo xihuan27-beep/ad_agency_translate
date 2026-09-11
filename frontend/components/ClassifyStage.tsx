@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useAppStore, materializeMerges } from "@/lib/store";
 import { slideImageUrl } from "@/lib/api";
 import type { Category, ClassifiedUnit } from "@/lib/types";
+import ErrorNotice from "@/components/ErrorNotice";
 
 export default function ClassifyStage() {
   const sessionId = useAppStore((s) => s.sessionId);
@@ -89,9 +90,7 @@ export default function ClassifyStage() {
       </div>
 
       {error && (
-        <div className="error-box" style={{ maxWidth: 1200, margin: "0 auto 14px" }}>
-          {error}
-        </div>
+        <ErrorNotice message={error} context="슬라이드 분류 단계" style={{ maxWidth: 1200, margin: "0 auto 14px" }} />
       )}
 
       <div className="classify-3col">

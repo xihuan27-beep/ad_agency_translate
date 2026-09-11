@@ -129,4 +129,11 @@ export async function applyTranslations(
   });
 }
 
+export async function reportError(message: string, context = ""): Promise<void> {
+  await request("/api/report-error", {
+    method: "POST",
+    body: JSON.stringify({ message, context }),
+  });
+}
+
 export { ApiError };

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { ApiError, grammarCheck, refineCopy, slideImageUrl, translateCopyOptions } from "@/lib/api";
 import type { TextUnit } from "@/lib/types";
+import ErrorNotice from "@/components/ErrorNotice";
 
 const OPTS_META: [string, string][] = [
   ["의역", "Feel, rhythm, impact 우선"],
@@ -84,7 +85,7 @@ export default function ReviewCopyStage() {
   if (!total || !unit) {
     return (
       <div className="page page-narrow">
-        {error && <div className="error-box">{error}</div>}
+        {error && <ErrorNotice message={error} context="카피 선택 단계" />}
         <div className="card">카피 텍스트가 없습니다.</div>
         <button className="btn btn-primary btn-block" onClick={() => setStage("download")}>
           다운로드 →
@@ -151,7 +152,7 @@ export default function ReviewCopyStage() {
         </div>
 
         <div className="review-right">
-          {error && <div className="error-box">{error}</div>}
+          {error && <ErrorNotice message={error} context="카피 선택 단계" />}
 
           <div className="pair-block">
             <div className="ko-block">{unit.ko_text}</div>

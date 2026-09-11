@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { ApiError, refineCopy, slideImageUrl, translatePresentation } from "@/lib/api";
+import ErrorNotice from "@/components/ErrorNotice";
 
 interface ChatMsg {
   role: "user" | "ai";
@@ -111,9 +112,7 @@ export default function ReviewPresentationStage() {
   return (
     <>
       {error && (
-        <div className="error-box" style={{ maxWidth: 1200, margin: "14px auto" }}>
-          {error}
-        </div>
+        <ErrorNotice message={error} context="발표용 감수 단계" style={{ maxWidth: 1200, margin: "14px auto" }} />
       )}
       <div className="review-layout">
         <div className="review-left">

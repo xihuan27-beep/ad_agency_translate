@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { ApiError, classify, fetchFile, translateEnToKo } from "@/lib/api";
+import ErrorNotice from "@/components/ErrorNotice";
 
 export default function UploadStage() {
   const sessionId = useAppStore((s) => s.sessionId);
@@ -97,7 +98,7 @@ export default function UploadStage() {
         </button>
       </div>
 
-      {error && <div className="error-box">{error}</div>}
+      {error && <ErrorNotice message={error} context="파일 업로드 단계" />}
 
       <div className="card">
         <div className="card-title">번역할 PPT 파일 업로드 하기</div>
