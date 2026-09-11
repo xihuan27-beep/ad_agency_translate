@@ -17,7 +17,7 @@ ENV PYTHONUNBUFFERED=1
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
-COPY ai_utils.py pptx_utils.py docx_utils.py ./
+COPY ai_utils.py pptx_utils.py docx_utils.py pdf_utils.py email_utils.py ./
 COPY backend/ ./backend/
 
 EXPOSE 8000
