@@ -35,13 +35,15 @@ export async function createSession(): Promise<string> {
   return data.sessionId;
 }
 
-export type SlideImageStatus = "none" | "pending" | "ready" | "failed";
+export type SlideImageStatus = "none" | "pending" | "ready" | "failed" | "skipped";
 
 export interface FetchResult {
   fileType: FileType;
   slideCount: number;
   hasSlideImages: boolean;
   slideImageStatus: SlideImageStatus;
+  sizeWarning: boolean;
+  fileSizeMB: number;
   textUnits: TextUnit[];
 }
 

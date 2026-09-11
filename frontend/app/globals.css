@@ -349,3 +349,9 @@ button, input, textarea, select {
 .error-report-btn:hover { background: #FFE8D5; }
 .error-report-btn:disabled { opacity: .6; cursor: default; }
 .error-report-sent { margin-top: 8px; font-size: 12px; color: #B84500; }
+
+.warning-box {
+  background: var(--cnt); border: 1px solid var(--cbl); color: var(--cm); border-radius: 8px;
+  padding: 12px 14px; font-size: 12.5px; line-height: 1.6; margin-bottom: 14px;
+}
+.warning-box strong { color: var(--ct); }

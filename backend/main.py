@@ -45,6 +45,10 @@ from email_utils import send_error_report  # noqa: E402
 
 app = FastAPI(title="Agency Deck Translator API")
 
+# Above this, skip slide-image rendering rather than risk an OOM crash
+# (Render's free tier caps the whole process at 512MB).
+FILE_SIZE_WARNING_MB = 20
+
 _frontend_origin = os.environ.get("FRONTEND_ORIGIN", "*")
 app.add_middleware(
     CORSMiddleware,
@@ -205,9 +209,20 @@ def fetch_file(session_id: str, body: FetchRequest, background_tasks: Background
     session.slide_images = []
     session.slide_count = slide_count
 
-    if file_type in ("pptx", "pdf"):
+    # The server has a hard 512MB RAM ceiling (free-tier Render). Converting a
+    # large/media-heavy deck to PDF via LibreOffice has been observed to blow
+    # past that and get the whole process OOM-killed — which doesn't just
+    # fail this request, it crashes every other session on the same server.
+    # So above this size we skip the render attempt entirely rather than
+    # gamble with a crash; text extraction/translation is unaffected either way.
+    size_mb = len(file_bytes) / (1024 * 1024)
+    size_warning = size_mb > FILE_SIZE_WARNING_MB
+
+    if file_type in ("pptx", "pdf") and not size_warning:
         session.slide_image_status = "pending"
         background_tasks.add_task(_render_images_bg, session.id, file_bytes, file_type)
+    elif file_type in ("pptx", "pdf"):
+        session.slide_image_status = "skipped"
     else:
         session.slide_image_status = "none"
 
@@ -216,6 +231,8 @@ def fetch_file(session_id: str, body: FetchRequest, background_tasks: Background
         "slideCount": slide_count,
         "hasSlideImages": False,
         "slideImageStatus": session.slide_image_status,
+        "sizeWarning": size_warning,
+        "fileSizeMB": round(size_mb, 1),
         "textUnits": text_units,
     }
 

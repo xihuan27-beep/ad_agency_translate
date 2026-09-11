@@ -24,6 +24,7 @@ export default function UploadStage() {
   const [fetching, setFetching] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
+  const [sizeWarning, setSizeWarning] = useState<{ fileSizeMB: number } | null>(null);
 
   const isEnKo = direction === "en_ko";
   const urlTrimmed = urlInput.trim();
@@ -33,6 +34,7 @@ export default function UploadStage() {
   async function handleFetch() {
     if (!sessionId || !urlTrimmed || alreadyFetched) return;
     setError("");
+    setSizeWarning(null);
     setFetching(true);
     try {
       const result = await fetchFile(sessionId, urlTrimmed);
@@ -40,6 +42,9 @@ export default function UploadStage() {
       setFetchedUrl(urlTrimmed);
       if (result.slideImageStatus === "pending") {
         pollSlideImageStatus(sessionId, () => setHasSlideImages(true));
+      }
+      if (result.sizeWarning) {
+        setSizeWarning({ fileSizeMB: result.fileSizeMB });
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "다운로드 실패");
@@ -103,6 +108,13 @@ export default function UploadStage() {
       </div>
 
       {error && <ErrorNotice message={error} context="파일 업로드 단계" />}
+      {sizeWarning && (
+        <div className="warning-box">
+          파일 크기가 커요 ({sizeWarning.fileSizeMB}MB). 무료 서버 메모리 제한 때문에 이 파일은{" "}
+          <strong>슬라이드 미리보기 이미지 생성을 생략</strong>합니다. 텍스트 분류/번역/다운로드는 정상적으로
+          진행됩니다.
+        </div>
+      )}
 
       <div className="card">
         <div className="card-title">번역할 PPT 파일 업로드 하기</div>
