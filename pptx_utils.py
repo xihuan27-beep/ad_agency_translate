@@ -2,6 +2,7 @@ import io
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from pptx import Presentation
 from pptx.util import Pt
@@ -127,6 +128,26 @@ def apply_translations(file_bytes: bytes, translations: dict[str, str], font_nam
     return out.getvalue()
 
 
+def _convert_to_pdf_once(pptx_path: str, tmpdir: str, attempt: int) -> subprocess.CompletedProcess | None:
+    # Give each attempt its own isolated profile dir — without it, concurrent
+    # or back-to-back headless soffice runs can fight over a shared profile
+    # lock and fail with "source file could not be loaded" even though the
+    # input file itself is fine. LibreOffice's headless CLI can also exit 0
+    # while still failing (the real error only shows up in stderr), so the
+    # caller must check for the output file rather than trust the exit code.
+    profile_dir = os.path.join(tmpdir, f"lo_profile_{attempt}")
+    try:
+        return subprocess.run(
+            ["libreoffice", "--headless",
+             f"-env:UserInstallation=file://{profile_dir}",
+             "--convert-to", "pdf", "--outdir", tmpdir, pptx_path],
+            capture_output=True, timeout=180,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        print(f"[render_slides_to_images] libreoffice error (attempt {attempt}): {e}", file=sys.stderr)
+        return None
+
+
 def render_slides_to_images(file_bytes: bytes) -> list[bytes]:
     """Convert each PPTX slide to a PNG image.
 
@@ -138,28 +159,40 @@ def render_slides_to_images(file_bytes: bytes) -> list[bytes]:
         with open(pptx_path, "wb") as f:
             f.write(file_bytes)
 
-        # Step 1: PPTX → PDF (LibreOffice reliably exports all slides to PDF)
-        try:
-            subprocess.run(
-                ["libreoffice", "--headless", "--convert-to", "pdf",
-                 "--outdir", tmpdir, pptx_path],
-                check=True, capture_output=True, timeout=180,
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-            return []
-
+        # Step 1: PPTX → PDF. Headless LibreOffice is known to occasionally
+        # no-op (especially on a cold/first profile init) — retry once.
         pdf_path = os.path.join(tmpdir, "input.pdf")
-        if not os.path.exists(pdf_path):
+        proc = None
+        for attempt in (1, 2):
+            proc = _convert_to_pdf_once(pptx_path, tmpdir, attempt)
+            if os.path.exists(pdf_path):
+                break
+        else:
+            if proc is not None:
+                print(
+                    f"[render_slides_to_images] libreoffice never produced a PDF (code {proc.returncode}): "
+                    f"stdout={proc.stdout.decode(errors='replace')[:2000]!r} "
+                    f"stderr={proc.stderr.decode(errors='replace')[:2000]!r}",
+                    file=sys.stderr,
+                )
             return []
 
         # Step 2: PDF pages → PNG (pdftoppm from poppler-utils)
         slide_prefix = os.path.join(tmpdir, "slide")
         try:
-            subprocess.run(
+            proc = subprocess.run(
                 ["pdftoppm", "-png", "-r", "100", pdf_path, slide_prefix],
-                check=True, capture_output=True, timeout=180,
+                capture_output=True, timeout=180,
             )
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            if proc.returncode != 0:
+                print(
+                    f"[render_slides_to_images] pdftoppm failed (code {proc.returncode}): "
+                    f"stderr={proc.stderr.decode(errors='replace')[:2000]!r}",
+                    file=sys.stderr,
+                )
+                return []
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            print(f"[render_slides_to_images] pdftoppm error: {e}", file=sys.stderr)
             return []
 
         # pdftoppm outputs: slide-1.png, slide-2.png, ... (or zero-padded)

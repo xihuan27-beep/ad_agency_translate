@@ -141,7 +141,8 @@ def _render_images_bg(session_id: str, file_bytes: bytes, file_type: str):
             images = []
         session.slide_images = images
         session.slide_image_status = "ready" if images else "failed"
-    except Exception:
+    except Exception as e:
+        print(f"[_render_images_bg] unexpected error for session={session_id}: {e}", file=sys.stderr)
         session.slide_image_status = "failed"
 
 
