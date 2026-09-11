@@ -8,6 +8,7 @@ MODEL = "claude-haiku-4-5"
 TRANSLATE_BATCH = 20   # units per API call for presentation translation
 COPY_BATCH = 10        # copy options need more tokens per item
 CLASSIFY_BATCH = 50    # classify is short per item, but still batch for safety
+REVIEW_BATCH = 30      # quality review output is short per item
 
 
 def _client() -> anthropic.Anthropic:
@@ -172,6 +173,71 @@ Write "notes" and "clarification" fields in Korean:
             "en_text": item.get("en_text", ""),
             "notes": item.get("notes", ""),
             "clarification": item.get("clarification", ""),
+        }
+        for item in all_items
+    }
+
+
+def review_presentation_translations(
+    presentation_units: list[dict], translations: dict[str, str], glossary: str
+) -> dict[str, dict]:
+    """Have a second pass flag presentation translations likely to need human review.
+
+    Returns id -> {flagged: bool, issue: str (Korean, empty if not flagged)}.
+    Meant to cut down how much a human has to re-check by surfacing only the
+    translations that look mistranslated, incomplete, or awkward.
+    """
+    client = _client()
+
+    def _call(units: list[dict]) -> list[dict]:
+        input_list = [
+            {"id": u["id"], "ko_text": u["ko_text"], "en_text": translations.get(u["id"], "")}
+            for u in units
+        ]
+
+        prompt = f"""You are a bilingual (Korean/English) proofreader at an advertising agency, doing quality control on machine-translated presentation text before a human does a final pass.
+
+[Task]
+For each item, compare ko_text (source) against en_text (translation). Flag it ONLY if there's a real problem:
+- Mistranslation or meaning that doesn't match the Korean
+- Missing information that was in the Korean
+- Awkward or unnatural English a native speaker wouldn't write
+- Numbers, dates, names, or terms that don't match
+
+Do NOT flag minor stylistic differences, or translations that are simply a valid interpretation.
+Most items should NOT be flagged — only flag genuine issues, since the goal is to let a human skip everything that's already fine.
+{_glossary_line(glossary)}
+
+You MUST return exactly one JSON object per input item — never skip, merge, or split items.
+
+[Input]
+{json.dumps(input_list, ensure_ascii=False, indent=2)}
+
+[Output Format]
+Respond with ONLY a JSON array:
+[
+  {{"id": "...", "flagged": true, "issue": "한국어로 간단히 무엇이 문제인지 설명"}},
+  {{"id": "...", "flagged": false, "issue": ""}}
+]"""
+
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return _extract_json(resp.content[0].text)
+
+    all_items: list[dict] = []
+    for i in range(0, len(presentation_units), REVIEW_BATCH):
+        batch = presentation_units[i : i + REVIEW_BATCH]
+        first = _call(batch)
+        batch_result = _retry_missing(_call, batch, first)
+        all_items.extend(batch_result)
+
+    return {
+        item["id"]: {
+            "flagged": bool(item.get("flagged", False)),
+            "issue": item.get("issue", ""),
         }
         for item in all_items
     }

@@ -1,4 +1,4 @@
-import type { ClassifiedUnit, CopyOptionSet, FileType, KeyPhrasePair, PresentationTranslation, TextUnit } from "./types";
+import type { ClassifiedUnit, CopyOptionSet, FileType, KeyPhrasePair, PresentationReviewItem, PresentationTranslation, TextUnit } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -69,6 +69,18 @@ export async function translatePresentation(
     { method: "POST", body: JSON.stringify({ units, keyPhrases }) }
   );
   return data.translations;
+}
+
+export async function reviewPresentation(
+  units: TextUnit[],
+  translations: Record<string, string>,
+  keyPhrases: KeyPhrasePair[]
+): Promise<Record<string, PresentationReviewItem>> {
+  const data = await request<{ review: Record<string, PresentationReviewItem> }>(
+    "/api/translate/review-presentation",
+    { method: "POST", body: JSON.stringify({ units, translations, keyPhrases }) }
+  );
+  return data.review;
 }
 
 export async function translateCopyOptions(

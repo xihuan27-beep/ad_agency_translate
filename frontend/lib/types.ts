@@ -30,6 +30,11 @@ export interface PresentationTranslation {
   clarification: string;
 }
 
+export interface PresentationReviewItem {
+  flagged: boolean;
+  issue: string;
+}
+
 export interface CopyOptionSet {
   options: [string, string, string];
   notes: string;

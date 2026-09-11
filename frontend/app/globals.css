@@ -205,6 +205,13 @@ button, input, textarea, select {
   background: #fff; color: var(--ct3); cursor: pointer; font-size: 12px; line-height: 1;
 }
 .item-excl-btn:hover { border-color: var(--cp); color: var(--cp); }
+.item-move-col { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.item-move-btn {
+  width: 18px; height: 15px; border-radius: 3px; border: 1px solid var(--cb);
+  background: #fff; color: var(--ct3); cursor: pointer; font-size: 8px; line-height: 1; padding: 0;
+}
+.item-move-btn:hover:not(:disabled) { border-color: var(--cp); color: var(--cp); }
+.item-move-btn:disabled { opacity: .35; cursor: default; }
 
 /* ── Separator (merge toggle) ── */
 .separator { display: flex; align-items: center; gap: 8px; margin: 2px 0; height: 22px; }
@@ -241,6 +248,7 @@ button, input, textarea, select {
 
 /* KO/EN pair */
 .pair-block { background: #fff; border-radius: 8px; box-shadow: var(--cs); overflow: hidden; }
+.pair-block.flagged { box-shadow: 0 0 0 2px #F5A623, var(--cs); }
 .ko-block { padding: 13px 15px; font-size: 13.5px; color: var(--ct); line-height: 1.7; }
 .en-block { background: var(--cp); }
 .en-text {
@@ -249,6 +257,19 @@ button, input, textarea, select {
   resize: none; display: block;
 }
 .pair-note { font-size: 12px; color: var(--cm); line-height: 1.5; padding: 0 4px; }
+.pair-note.flagged { color: #B84500; font-weight: 500; }
+
+/* AI quality-review summary (발표용 감수) */
+.review-flag-summary {
+  background: #FFF8EC; border: 1px solid #FBDDA6; color: #92600A; border-radius: 8px;
+  padding: 10px 14px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.review-flag-next-btn {
+  font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 6px; font-family: inherit;
+  border: 1px solid #FBDDA6; background: #fff; color: #92600A; cursor: pointer; white-space: nowrap;
+}
+.review-flag-next-btn:hover { background: #FFF1D6; }
 
 /* Copy option cards */
 .copyopt {

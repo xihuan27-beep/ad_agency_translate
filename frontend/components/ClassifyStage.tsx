@@ -23,6 +23,7 @@ export default function ClassifyStage() {
   const setStage = useAppStore((s) => s.setStage);
   const setReviewUnits = useAppStore((s) => s.setReviewUnits);
   const resetReviewProgress = useAppStore((s) => s.resetReviewProgress);
+  const moveUnit = useAppStore((s) => s.moveUnit);
 
   const [manualText, setManualText] = useState("");
   const [manualCat, setManualCat] = useState<Category>("presentation");
@@ -165,6 +166,24 @@ export default function ClassifyStage() {
                   return (
                     <div key={u.id}>
                       <div className={cardCls}>
+                        <div className="item-move-col">
+                          <button
+                            className="item-move-btn"
+                            title="위로 이동"
+                            disabled={pos === 0}
+                            onClick={() => moveUnit(activeSlide, pos, "up")}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            className="item-move-btn"
+                            title="아래로 이동"
+                            disabled={pos === slideItems.length - 1}
+                            onClick={() => moveUnit(activeSlide, pos, "down")}
+                          >
+                            ▼
+                          </button>
+                        </div>
                         {isExcluded ? (
                           <span style={{ fontSize: 11, color: "var(--ct3)", flexShrink: 0 }}>제외됨</span>
                         ) : (

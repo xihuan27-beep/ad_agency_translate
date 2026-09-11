@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { ApiError, refineCopy, slideImageUrl, translatePresentation } from "@/lib/api";
+import { ApiError, refineCopy, reviewPresentation, slideImageUrl, translatePresentation } from "@/lib/api";
 import ErrorNotice from "@/components/ErrorNotice";
 
 interface ChatMsg {
@@ -19,16 +19,20 @@ export default function ReviewPresentationStage() {
   const presentationTranslations = useAppStore((s) => s.presentationTranslations);
   const setPresentationTranslations = useAppStore((s) => s.setPresentationTranslations);
   const updatePresentationTranslation = useAppStore((s) => s.updatePresentationTranslation);
+  const presentationReview = useAppStore((s) => s.presentationReview);
+  const setPresentationReview = useAppStore((s) => s.setPresentationReview);
   const currentPresIdx = useAppStore((s) => s.currentPresIdx);
   const setCurrentPresIdx = useAppStore((s) => s.setCurrentPresIdx);
   const setStage = useAppStore((s) => s.setStage);
 
   const [loading, setLoading] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [error, setError] = useState("");
   const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const loadedRef = useRef(false);
+  const reviewLoadedRef = useRef(false);
 
   const slideBySlide = useMemo(() => {
     const map = new Map<number, typeof presentationUnits>();
@@ -50,10 +54,41 @@ export default function ReviewPresentationStage() {
     loadedRef.current = true;
     setLoading(true);
     translatePresentation(presentationUnits, keyPhrases)
-      .then(setPresentationTranslations)
+      .then((translations) => {
+        setPresentationTranslations(translations);
+        if (reviewLoadedRef.current) return;
+        reviewLoadedRef.current = true;
+        const enTexts: Record<string, string> = {};
+        for (const [id, v] of Object.entries(translations)) enTexts[id] = v.en_text;
+        setReviewLoading(true);
+        reviewPresentation(presentationUnits, enTexts, keyPhrases)
+          .then(setPresentationReview)
+          .catch(() => {})
+          .finally(() => setReviewLoading(false));
+      })
       .catch((e) => setError(e instanceof ApiError ? e.message : "번역 오류"))
       .finally(() => setLoading(false));
-  }, [presentationUnits, keyPhrases, setPresentationTranslations]);
+  }, [presentationUnits, keyPhrases, setPresentationTranslations, setPresentationReview]);
+
+  const flaggedSlidePositions = useMemo(() => {
+    const positions: number[] = [];
+    slideKeys.forEach((sIdx, pos) => {
+      const units = slideBySlide.get(sIdx) || [];
+      if (units.some((u) => presentationReview[u.id]?.flagged)) positions.push(pos);
+    });
+    return positions;
+  }, [slideKeys, slideBySlide, presentationReview]);
+
+  const flaggedCount = useMemo(
+    () => presentationUnits.filter((u) => presentationReview[u.id]?.flagged).length,
+    [presentationUnits, presentationReview]
+  );
+
+  function goToNextFlagged() {
+    if (!flaggedSlidePositions.length) return;
+    const next = flaggedSlidePositions.find((p) => p > slidePos) ?? flaggedSlidePositions[0];
+    setCurrentPresIdx(next);
+  }
 
   useEffect(() => {
     setChatMsgs([]);
@@ -152,12 +187,25 @@ export default function ReviewPresentationStage() {
         </div>
 
         <div className="review-right">
+          {(reviewLoading || flaggedCount > 0) && (
+            <div className="review-flag-summary">
+              {reviewLoading
+                ? "AI가 번역 퀄리티를 검토하는 중..."
+                : `⚠ AI가 검토를 권장하는 항목 ${flaggedCount}개 / 전체 ${presentationUnits.length}개`}
+              {!reviewLoading && flaggedSlidePositions.length > 0 && (
+                <button className="review-flag-next-btn" onClick={goToNextFlagged}>
+                  다음 검토 필요 슬라이드로 →
+                </button>
+              )}
+            </div>
+          )}
           {slideUnits.map((unit) => {
             const item = presentationTranslations[unit.id] || { en_text: "", notes: "", clarification: "" };
             const note = item.notes || item.clarification;
+            const review = presentationReview[unit.id];
             return (
               <div key={unit.id}>
-                <div className="pair-block">
+                <div className={`pair-block${review?.flagged ? " flagged" : ""}`}>
                   <div className="ko-block">{unit.ko_text}</div>
                   <div className="en-block">
                     <textarea
@@ -168,6 +216,7 @@ export default function ReviewPresentationStage() {
                     />
                   </div>
                 </div>
+                {review?.flagged && <div className="pair-note flagged">⚠ {review.issue}</div>}
                 {note && <div className="pair-note">📝 {note}</div>}
               </div>
             );

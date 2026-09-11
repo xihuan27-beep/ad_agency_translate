@@ -14,6 +14,7 @@ sys.path.insert(0, _here)
 from ai_utils import (  # noqa: E402
     classify_text_units,
     translate_presentation_texts,
+    review_presentation_translations,
     generate_copy_options,
     chat_refine_copy,
     check_copy_grammar,
@@ -64,6 +65,12 @@ class ClassifyRequest(BaseModel):
 
 class TranslateUnitsRequest(BaseModel):
     units: list[dict]
+    keyPhrases: list[dict] = []
+
+
+class ReviewPresentationRequest(BaseModel):
+    units: list[dict]
+    translations: dict[str, str]
     keyPhrases: list[dict] = []
 
 
@@ -218,6 +225,16 @@ def translate_presentation(body: TranslateUnitsRequest):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"번역 오류: {e}")
     return {"translations": result}
+
+
+@app.post("/api/translate/review-presentation")
+def review_presentation(body: ReviewPresentationRequest):
+    context = build_context(body.keyPhrases)
+    try:
+        result = review_presentation_translations(body.units, body.translations, context)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"검수 오류: {e}")
+    return {"review": result}
 
 
 @app.post("/api/translate/copy-options")

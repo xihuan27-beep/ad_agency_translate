@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ClassifiedUnit, CopyOptionSet, Direction, FileType, KeyPhrasePair, PresentationTranslation, Stage, TextUnit } from "./types";
+import type { ClassifiedUnit, CopyOptionSet, Direction, FileType, KeyPhrasePair, PresentationReviewItem, PresentationTranslation, Stage, TextUnit } from "./types";
 
 interface AppState {
   sessionId: string | null;
@@ -24,6 +24,7 @@ interface AppState {
   presentationUnits: TextUnit[];
   copyUnits: TextUnit[];
   presentationTranslations: Record<string, PresentationTranslation>;
+  presentationReview: Record<string, PresentationReviewItem>;
   copyOptions: Record<string, CopyOptionSet>;
   copySelections: Record<string, string>;
   currentPresIdx: number;
@@ -46,12 +47,14 @@ interface AppState {
   setAllCategory: (slideIdx: number, category: "presentation" | "copy") => void;
   toggleExcluded: (id: string) => void;
   toggleMerge: (slideIdx: number, pos: number) => void;
+  moveUnit: (slideIdx: number, pos: number, direction: "up" | "down") => void;
   addManualUnit: (unit: ClassifiedUnit) => void;
   setActiveSlide: (idx: number) => void;
   setReviewUnits: (pres: TextUnit[], copy: TextUnit[]) => void;
   resetReviewProgress: () => void;
   setPresentationTranslations: (t: Record<string, PresentationTranslation>) => void;
   updatePresentationTranslation: (id: string, enText: string) => void;
+  setPresentationReview: (r: Record<string, PresentationReviewItem>) => void;
   setCopyOptions: (o: Record<string, CopyOptionSet>) => void;
   setCopySelection: (id: string, text: string) => void;
   setCopySelectionsForIds: (ids: string[], text: string) => void;
@@ -82,6 +85,7 @@ const initialState = {
   presentationUnits: [] as TextUnit[],
   copyUnits: [] as TextUnit[],
   presentationTranslations: {} as Record<string, PresentationTranslation>,
+  presentationReview: {} as Record<string, PresentationReviewItem>,
   copyOptions: {} as Record<string, CopyOptionSet>,
   copySelections: {} as Record<string, string>,
   currentPresIdx: 0,
@@ -137,6 +141,24 @@ export const useAppStore = create<AppState>((set) => ({
       return { mergedSeps: next };
     }),
 
+  moveUnit: (slideIdx, pos, direction) =>
+    set((s) => {
+      const indices: number[] = [];
+      s.classifiedUnits.forEach((u, i) => {
+        if (u.slide_idx === slideIdx) indices.push(i);
+      });
+      const to = direction === "up" ? pos - 1 : pos + 1;
+      if (to < 0 || to >= indices.length) return {};
+      const units = [...s.classifiedUnits];
+      const idxFrom = indices[pos];
+      const idxTo = indices[to];
+      [units[idxFrom], units[idxTo]] = [units[idxTo], units[idxFrom]];
+      // adjacency within this slide changed — stale merge separators no longer mean anything
+      const mergedSeps = { ...s.mergedSeps };
+      delete mergedSeps[slideIdx];
+      return { classifiedUnits: units, mergedSeps };
+    }),
+
   addManualUnit: (unit) => set((s) => ({ classifiedUnits: [...s.classifiedUnits, unit] })),
 
   setActiveSlide: (activeSlide) => set({ activeSlide }),
@@ -145,6 +167,7 @@ export const useAppStore = create<AppState>((set) => ({
   resetReviewProgress: () =>
     set({
       presentationTranslations: {},
+      presentationReview: {},
       copyOptions: {},
       copySelections: {},
       currentPresIdx: 0,
@@ -158,6 +181,7 @@ export const useAppStore = create<AppState>((set) => ({
         [id]: { ...s.presentationTranslations[id], en_text: enText },
       },
     })),
+  setPresentationReview: (presentationReview) => set({ presentationReview }),
 
   setCopyOptions: (copyOptions) => set({ copyOptions }),
   setCopySelection: (id, text) => set((s) => ({ copySelections: { ...s.copySelections, [id]: text } })),
