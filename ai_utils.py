@@ -18,20 +18,30 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
-def _extract_json(text: str):
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-    for start, end in [("[", "]"), ("{", "}")]:
-        s = text.find(start)
-        e = text.rfind(end)
-        if s >= 0 and e > s:
-            try:
-                return json.loads(text[s : e + 1])
-            except Exception:
-                pass
-    raise ValueError(f"JSON 파싱 실패: {text[:300]}")
+def _tool_call(client: anthropic.Anthropic, prompt: str, item_schema: dict) -> list[dict]:
+    """Call the model with a forced tool call so the result list is guaranteed valid
+    JSON matching item_schema — avoids free-text JSON responses breaking on things
+    like an unescaped quote inside a translated string."""
+    tool = {
+        "name": "submit_results",
+        "description": "Submit the results as a list of items, one per input item.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"items": {"type": "array", "items": item_schema}},
+            "required": ["items"],
+        },
+    }
+    resp = client.messages.create(
+        model=MODEL,
+        max_tokens=8192,
+        tools=[tool],
+        tool_choice={"type": "tool", "name": "submit_results"},
+        messages=[{"role": "user", "content": prompt}],
+    )
+    for block in resp.content:
+        if block.type == "tool_use":
+            return block.input.get("items", [])
+    raise ValueError("모델이 결과를 반환하지 않았습니다.")
 
 
 def _glossary_line(context: str) -> str:
@@ -72,15 +82,16 @@ Classify each text unit as:
 Input:
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
-Respond with ONLY a JSON array:
-[{{"id": "...", "category": "presentation"}}]"""
+Submit one result per input item, in the same order."""
 
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return _extract_json(resp.content[0].text)
+        return _tool_call(client, prompt, {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "category": {"type": "string", "enum": ["presentation", "copy"]},
+            },
+            "required": ["id", "category"],
+        })
 
     all_items: list[dict] = []
     for i in range(0, len(text_units), CLASSIFY_BATCH):
@@ -142,23 +153,19 @@ The output array length must equal the input array length.
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
 [Output Format]
-Respond with ONLY a JSON array. Use empty string "" for notes/clarification when not applicable.
-Write "notes" and "clarification" fields in Korean:
-[
-  {{
-    "id": "...",
-    "en_text": "...",
-    "notes": "문화적/맥락 적응 설명 (한국어), 또는 빈 문자열",
-    "clarification": "한국어 원문이 모호한 경우 해석 가정 (한국어), 또는 빈 문자열"
-  }}
-]"""
+Use empty string "" for notes/clarification when not applicable.
+Write "notes" and "clarification" fields in Korean."""
 
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return _extract_json(resp.content[0].text)
+        return _tool_call(client, prompt, {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "en_text": {"type": "string"},
+                "notes": {"type": "string", "description": "문화적/맥락 적응 설명 (한국어), 또는 빈 문자열"},
+                "clarification": {"type": "string", "description": "한국어 원문이 모호한 경우 해석 가정 (한국어), 또는 빈 문자열"},
+            },
+            "required": ["id", "en_text", "notes", "clarification"],
+        })
 
     # Process in batches to stay within max_tokens
     all_items: list[dict] = []
@@ -211,21 +218,17 @@ Most items should NOT be flagged — only flag genuine issues, since the goal is
 You MUST return exactly one JSON object per input item — never skip, merge, or split items.
 
 [Input]
-{json.dumps(input_list, ensure_ascii=False, indent=2)}
+{json.dumps(input_list, ensure_ascii=False, indent=2)}"""
 
-[Output Format]
-Respond with ONLY a JSON array:
-[
-  {{"id": "...", "flagged": true, "issue": "한국어로 간단히 무엇이 문제인지 설명"}},
-  {{"id": "...", "flagged": false, "issue": ""}}
-]"""
-
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return _extract_json(resp.content[0].text)
+        return _tool_call(client, prompt, {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "flagged": {"type": "boolean"},
+                "issue": {"type": "string", "description": "한국어로 간단히 무엇이 문제인지 설명, 또는 빈 문자열"},
+            },
+            "required": ["id", "flagged", "issue"],
+        })
 
     all_items: list[dict] = []
     for i in range(0, len(presentation_units), REVIEW_BATCH):
@@ -298,24 +301,26 @@ Consider the full sequence together — maintain campaign/narrative flow across 
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
 [Output Format]
-Respond with ONLY a JSON array. Write notes/recommendation/cultural_flag/clarification in Korean:
-[
-  {{
-    "id": "...",
-    "options": ["Option 1 creative", "Option 2 balanced", "Option 3 faithful"],
-    "notes": "한국어로 작성",
-    "recommendation": "한국어로 작성",
-    "cultural_flag": "한국어로 작성, 또는 빈 문자열",
-    "clarification": "한국어로 작성, 또는 빈 문자열"
-  }}
-]"""
+Write notes/recommendation/cultural_flag/clarification in Korean."""
 
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return _extract_json(resp.content[0].text)
+        return _tool_call(client, prompt, {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "options": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "[Option 1 creative, Option 2 balanced, Option 3 faithful]",
+                },
+                "notes": {"type": "string", "description": "한국어로 작성"},
+                "recommendation": {"type": "string", "description": "한국어로 작성"},
+                "cultural_flag": {"type": "string", "description": "한국어로 작성, 또는 빈 문자열"},
+                "clarification": {"type": "string", "description": "한국어로 작성, 또는 빈 문자열"},
+            },
+            "required": ["id", "options", "notes", "recommendation", "cultural_flag", "clarification"],
+        })
 
     # Process in smaller batches — copy options are verbose, hit token limits faster
     all_items: list[dict] = []
@@ -368,15 +373,18 @@ User instruction: "{instruction}"
 Apply the instruction to ALL items — update those affected, keep others unchanged.
 Maintain the professional, clear, audience-appropriate tone.
 
-Respond with ONLY a JSON array (ALL items, not just changed ones):
-[{{"id": "...", "en_text": "...", "notes": "...", "clarification": "..."}}]"""
+Return ALL items, not just the changed ones."""
 
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=8192,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    result = _extract_json(resp.content[0].text)
+    result = _tool_call(client, prompt, {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "en_text": {"type": "string"},
+            "notes": {"type": "string"},
+            "clarification": {"type": "string"},
+        },
+        "required": ["id", "en_text", "notes", "clarification"],
+    })
     return {
         item["id"]: {
             "en_text": item.get("en_text", ""),
@@ -475,16 +483,16 @@ Readers: Korean advertising professionals who need to understand the client's in
 [Input]
 {json.dumps(input_list, ensure_ascii=False, indent=2)}
 
-[Output Format]
-Respond with ONLY a JSON array:
-[{{"id": "...", "ko_text": "..."}}]"""
+Submit one result per input item, in the same order."""
 
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return _extract_json(resp.content[0].text)
+        return _tool_call(client, prompt, {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "ko_text": {"type": "string"},
+            },
+            "required": ["id", "ko_text"],
+        })
 
     all_items: list[dict] = []
     for i in range(0, len(text_units), TRANSLATE_BATCH):
