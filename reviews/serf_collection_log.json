@@ -1,0 +1,40 @@
+{
+  "user_agent": "Claude-User",
+  "robots": {
+    "/search": true,
+    "/reviews": false,
+    "/reviews/1": false,
+    "/community": false,
+    "/hospitals/1": true
+  },
+  "robots_wildcard_all_blocked": true,
+  "review_total_reported": 826,
+  "review_guard_active": true,
+  "reviews_public_on_page": 0,
+  "compare": {
+    "울쎄라": {
+      "review_total_reported": 10000,
+      "reviews_public_on_page": 0,
+      "review_guard_active": true
+    },
+    "써마지": {
+      "review_total_reported": 4413,
+      "reviews_public_on_page": 0,
+      "review_guard_active": true
+    },
+    "슈링크": {
+      "review_total_reported": 10000,
+      "reviews_public_on_page": 0,
+      "review_guard_active": true
+    },
+    "올리지오": {
+      "review_total_reported": 2306,
+      "reviews_public_on_page": 0,
+      "review_guard_active": true
+    }
+  },
+  "collected": 0,
+  "collection_rate": 0.0,
+  "stop_reason": "리뷰 가드 활성화('로그인하고 보기'). 우회하지 않음. /reviews 경로는 robots.txt 차단.",
+  "collected_at": "2026-11-23T04:28:15+0000"
+}
